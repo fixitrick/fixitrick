@@ -92,8 +92,8 @@ textarea{resize:vertical;min-height:64px}
 <div id="v-ef" class="view">
   <div class="sh"><h2 id="eftitle">New Estimate</h2><button class="bs2" onclick="sv('est')">Back</button></div>
   <div class="card"><div class="ct">Customer</div>
-    <div class="r2"><div class="mb"><label>Name</label><input id="fcn" placeholder="Jane Smith"></div><div class="mb"><label>Phone</label><input id="fcp"></div></div>
-    <div class="r2"><div class="mb"><label>Email</label><input id="fce" type="email"></div><div class="mb"><label>Address</label><input id="fca"></div></div>
+    <div class="r2"><div class="mb"><label>Name</label><input id="fcn" placeholder="Jane Smith" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><input id="fcp" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r2"><div class="mb"><label>Email</label><input id="fce" type="email" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Address</label><input id="fca" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="card"><div class="ct">AI Estimator</div>
     <div id="apiwarn" class="api-warn" style="display:none"><strong>No API key set</strong> Go to Settings and add your Anthropic API key.</div>
@@ -112,8 +112,8 @@ textarea{resize:vertical;min-height:64px}
     <div id="flab"></div><button class="alb" onclick="addLL()">+ Add labor</button>
   </div>
   <div class="card"><div class="ct">Pricing</div>
-    <div class="r3"><div><label>Markup%</label><input type="number" id="fmk" value="20" oninput="calcT()"></div><div><label>Tax%</label><input type="number" id="ftx" value="0" step="0.1" oninput="calcT()"></div><div><label>Discount$</label><input type="number" id="fdc" value="0" oninput="calcT()"></div></div>
-    <div class="r2" style="margin-bottom:8px"><div><label>Deposit$</label><input type="number" id="fdep" value="0" step="0.01" oninput="calcT()"></div><div><label>Notes</label><input id="fnotes"></div></div>
+    <div class="r3"><div><label>Markup%</label><input type="number" id="fmk" value="20" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Tax%</label><input type="number" id="ftx" value="0" step="0.1" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Discount$</label><input type="number" id="fdc" value="0" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r2" style="margin-bottom:8px"><div><label>Deposit$</label><input type="number" id="fdep" value="0" step="0.01" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Notes</label><input id="fnotes" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
     <div class="tb">
       <div class="tr"><span>Materials</span><span id="tmat">$0.00</span></div><div class="tr"><span>Labor</span><span id="tlab">$0.00</span></div>
       <div class="tr"><span>Markup</span><span id="tmk">$0.00</span></div><div class="tr"><span>Discount</span><span id="tdc">-$0.00</span></div>
@@ -123,7 +123,7 @@ textarea{resize:vertical;min-height:64px}
       <div class="tr gold"><span>Balance due</span><span id="tbal">$0.00</span></div>
     </div>
   </div>
-  <input type="hidden" id="feid"><input type="hidden" id="fstat" value="draft"><input type="hidden" id="festnum">
+  <input type="hidden" id="feid" autocomplete="off" autocorrect="off" autocapitalize="off"><input type="hidden" id="fstat" value="draft" autocomplete="off" autocorrect="off" autocapitalize="off"><input type="hidden" id="festnum" autocomplete="off" autocorrect="off" autocapitalize="off">
   <div class="br">
     <button class="bp" onclick="saveEst()">Save</button>
     <button class="bs2" onclick="printEst()">Print PDF</button>
@@ -137,8 +137,8 @@ textarea{resize:vertical;min-height:64px}
 <div id="v-cli" class="view">
   <div class="sh"><h2>Clients</h2><button class="bp" onclick="toggleCF()">+ Add</button></div>
   <div class="card" id="cform" style="display:none"><div class="ct">New Client</div>
-    <div class="r2"><div class="mb"><label>Name</label><input id="cln"></div><div class="mb"><label>Phone</label><input id="clp"></div></div>
-    <div class="r2"><div class="mb"><label>Email</label><input id="cle"></div><div class="mb"><label>Address</label><input id="cla"></div></div>
+    <div class="r2"><div class="mb"><label>Name</label><input id="cln" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><input id="clp" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r2"><div class="mb"><label>Email</label><input id="cle" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Address</label><input id="cla" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveClient()">Save</button><button class="bs2" onclick="toggleCF()">Cancel</button></div>
   </div>
   <div class="card"><div id="clist"></div></div>
@@ -146,8 +146,8 @@ textarea{resize:vertical;min-height:64px}
 <div id="v-exp" class="view">
   <div class="sh"><h2>Expenses</h2><button class="bp" onclick="toggleEF()">+ Log</button></div>
   <div class="card" id="eform" style="display:none"><div class="ct">New Expense</div>
-    <div class="r3"><div class="mb"><label>Date</label><input type="date" id="exd"></div><div class="mb"><label>Amount$</label><input type="number" id="exa" step="0.01"></div><div class="mb"><label>Category</label><select id="exc"><option>Materials</option><option>Tools</option><option>Fuel / Mileage</option><option>Subcontractor</option><option>Marketing</option><option>Other</option></select></div></div>
-    <div class="mb"><label>Description</label><input id="exn" placeholder="What was this for?"></div>
+    <div class="r3"><div class="mb"><label>Date</label><input type="date" id="exd" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Amount$</label><input type="number" id="exa" step="0.01" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Category</label><select id="exc"><option>Materials</option><option>Tools</option><option>Fuel / Mileage</option><option>Subcontractor</option><option>Marketing</option><option>Other</option></select></div></div>
+    <div class="mb"><label>Description</label><input id="exn" placeholder="What was this for?" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveExp()">Log It</button><button class="bs2" onclick="toggleEF()">Cancel</button></div>
   </div>
   <div class="card"><div id="exlist"></div></div>
@@ -155,20 +155,20 @@ textarea{resize:vertical;min-height:64px}
 <div id="v-set" class="view">
   <div class="sh"><h2>Settings</h2></div>
   <div class="card"><div class="ct">Business Info</div>
-    <div class="r2"><div class="mb"><label>Business Name</label><input id="sb"></div><div class="mb"><label>Phone</label><input id="sp"></div></div>
-    <div class="r2"><div class="mb"><label>Email</label><input id="se"></div><div class="mb"><label>Website</label><input id="sw"></div></div>
+    <div class="r2"><div class="mb"><label>Business Name</label><input id="sb" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><input id="sp" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r2"><div class="mb"><label>Email</label><input id="se" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Website</label><input id="sw" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="card"><div class="ct">AI - Anthropic API Key</div>
-    <div class="mb"><label>API Key (get free at console.anthropic.com)</label><input id="sak" type="password" placeholder="sk-ant-..."></div>
+    <div class="mb"><label>API Key (get free at console.anthropic.com)</label><input id="sak" type="password" placeholder="sk-ant-..." autocomplete="off" autocorrect="off" autocapitalize="off"></div>
     <p style="font-size:11px;color:var(--faint)">Stored locally on your device only. Required for AI estimate and upsell features.</p>
   </div>
   <div class="card"><div class="ct">Default Rates</div>
-    <div class="r3"><div class="mb"><label>Labor $/hr</label><input type="number" id="sr" value="100"></div><div class="mb"><label>Markup%</label><input type="number" id="sm" value="20"></div><div class="mb"><label>Tax%</label><input type="number" id="st" value="0" step="0.1"></div></div>
+    <div class="r3"><div class="mb"><label>Labor $/hr</label><input type="number" id="sr" value="100" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Markup%</label><input type="number" id="sm" value="20" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Tax%</label><input type="number" id="st" value="0" step="0.1" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="card"><div class="ct">Defaults</div>
     <div class="mb"><label>Payment Terms</label><textarea id="spt" style="min-height:48px"></textarea></div>
-    <div class="r2"><div class="mb"><label>Estimate valid (days)</label><input type="number" id="sev" value="30"></div><div class="mb"><label>Invoice due (days)</label><input type="number" id="sid" value="30"></div></div>
-    <div class="mb"><label>Next Estimate #</label><input type="number" id="sne" value="1" min="1"></div>
+    <div class="r2"><div class="mb"><label>Estimate valid (days)</label><input type="number" id="sev" value="30" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Invoice due (days)</label><input type="number" id="sid" value="30" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="mb"><label>Next Estimate #</label><input type="number" id="sne" value="1" min="1" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
   </div>
   <div class="br"><button class="bp" onclick="saveSettings()">Save Settings</button></div>
 </div>
@@ -306,8 +306,8 @@ function openEF(id){mats=[];labs=[];document.getElementById("ubox").style.displa
 function updBtns(s){document.getElementById("btn-sent").style.display=s==="draft"?"":"none";document.getElementById("btn-appr").style.display=s==="sent"?"":"none";document.getElementById("btn-decl").style.display=s==="sent"?"":"none";document.getElementById("btn-inv").style.display=s==="approved"?"":"none"}
 function addML(){mats.push({id:uid(),name:"",qty:1,unit:0});renderMats();calcT()}
 function addLL(){labs.push({id:uid(),name:"",hrs:1,rate:S.rate});renderLabs();calcT()}
-function renderMats(){document.getElementById("fmat").innerHTML=mats.map(function(m,i){return"<div class=\"lir\"><input placeholder=\"Material\" value=\""+( m.name||"")+"\" oninput=\"mats["+i+"].name=this.value\"><input type=\"number\" min=\"0\" value=\""+( m.qty||1)+"\" style=\"text-align:center\" oninput=\"mats["+i+"].qty=+this.value;calcT()\"><input type=\"number\" min=\"0\" step=\"0.01\" value=\""+( m.unit||0)+"\" style=\"text-align:right\" oninput=\"mats["+i+"].unit=+this.value;calcT()\"><input type=\"number\" readonly value=\""+( ((m.qty||1)*(m.unit||0)).toFixed(2))+"\" style=\"text-align:right;background:var(--bg);color:var(--g)\"><button class=\"db2\" onclick=\"mats.splice("+i+",1);renderMats();calcT()\">x</button></div>"}).join("")}
-function renderLabs(){document.getElementById("flab").innerHTML=labs.map(function(l,i){return"<div class=\"lir\"><input placeholder=\"Task\" value=\""+( l.name||"")+"\" oninput=\"labs["+i+"].name=this.value\"><input type=\"number\" min=\"0\" step=\"0.5\" value=\""+( l.hrs||1)+"\" style=\"text-align:center\" oninput=\"labs["+i+"].hrs=+this.value;calcT()\"><input type=\"number\" min=\"0\" value=\""+( l.rate||S.rate)+"\" style=\"text-align:right\" oninput=\"labs["+i+"].rate=+this.value;calcT()\"><input type=\"number\" readonly value=\""+( ((l.hrs||1)*(l.rate||S.rate)).toFixed(2))+"\" style=\"text-align:right;background:var(--bg);color:var(--g)\"><button class=\"db2\" onclick=\"labs.splice("+i+",1);renderLabs();calcT()\">x</button></div>"}).join("")}
+function renderMats(){document.getElementById("fmat").innerHTML=mats.map(function(m,i){return"<div class=\"lir\"><input placeholder=\"Material\" value=\""+( m.name||"")+"\" oninput=\"mats["+i+"].name=this.value\" autocomplete="off" autocorrect="off" autocapitalize="off"><input type=\"number\" min=\"0\" value=\""+( m.qty||1)+"\" style=\"text-align:center\" oninput=\"mats["+i+"].qty=+this.value;calcT()\" autocomplete="off" autocorrect="off" autocapitalize="off"><input type=\"number\" min=\"0\" step=\"0.01\" value=\""+( m.unit||0)+"\" style=\"text-align:right\" oninput=\"mats["+i+"].unit=+this.value;calcT()\" autocomplete="off" autocorrect="off" autocapitalize="off"><input type=\"number\" readonly value=\""+( ((m.qty||1)*(m.unit||0)).toFixed(2))+"\" style=\"text-align:right;background:var(--bg);color:var(--g)\" autocomplete="off" autocorrect="off" autocapitalize="off"><button class=\"db2\" onclick=\"mats.splice("+i+",1);renderMats();calcT()\">x</button></div>"}).join("")}
+function renderLabs(){document.getElementById("flab").innerHTML=labs.map(function(l,i){return"<div class=\"lir\"><input placeholder=\"Task\" value=\""+( l.name||"")+"\" oninput=\"labs["+i+"].name=this.value\" autocomplete="off" autocorrect="off" autocapitalize="off"><input type=\"number\" min=\"0\" step=\"0.5\" value=\""+( l.hrs||1)+"\" style=\"text-align:center\" oninput=\"labs["+i+"].hrs=+this.value;calcT()\" autocomplete="off" autocorrect="off" autocapitalize="off"><input type=\"number\" min=\"0\" value=\""+( l.rate||S.rate)+"\" style=\"text-align:right\" oninput=\"labs["+i+"].rate=+this.value;calcT()\" autocomplete="off" autocorrect="off" autocapitalize="off"><input type=\"number\" readonly value=\""+( ((l.hrs||1)*(l.rate||S.rate)).toFixed(2))+"\" style=\"text-align:right;background:var(--bg);color:var(--g)\" autocomplete="off" autocorrect="off" autocapitalize="off"><button class=\"db2\" onclick=\"labs.splice("+i+",1);renderLabs();calcT()\">x</button></div>"}).join("")}
 function calcT(){
   var mt=mats.reduce(function(a,m){return a+(+(m.qty)||1)*(+(m.unit)||0)},0);
   var lt=labs.reduce(function(a,l){return a+(+(l.hrs)||1)*(+(l.rate)||S.rate||100)},0);
