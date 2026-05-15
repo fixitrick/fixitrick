@@ -242,7 +242,46 @@ function renderIL(){document.getElementById("ilist").innerHTML=invs.length?[].co
 function renderCL(){document.getElementById("clist").innerHTML=clients.length?clients.map(function(c){return"<div class=\"li\"><div><div class=\"lin\">"+c.name+"</div><div class=\"lim\">"+(c.phone||"")+" "+(c.email||"")+"</div></div><button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"estFromClient('"+c.id+"')\" >+ Est</button></div>"}).join(""):"<div class=\"es\">No clients</div>"}
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div><div class=\"lin\">"+(e.desc||e.cat)+"</div><div class=\"lim\">"+e.cat+" · "+e.date+"</div></div><span class=\"lia\">"+fmt(e.amount)+"</span></div>"}).join(""):"<div class=\"es\">No expenses</div>"}
 function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sak").value=S.apiKey||"";document.getElementById("sr").value=S.rate||100;document.getElementById("sm").value=S.markup||20;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=S.valid||30;document.getElementById("sid").value=S.due||30;document.getElementById("sne").value=S.nextEst||1}
-async function saveSettings(){S.biz=document.getElementById("sb").value||"FixItRick";S.phone=document.getElementById("sp").value;S.email=document.getElementById("se").value;S.web=document.getElementById("sw").value;var ak=document.getElementById("sak").value;S.apiKey=ak;ls("fir:apikey",ak);S.rate=+document.getElementById("sr").value||100;S.markup=+document.getElementById("sm").value||20;S.tax=+document.getElementById("st").value||0;S.terms=document.getElementById("spt").value;S.valid=+document.getElementById("sev").value||30;S.due=+document.getElementById("sid").value||30;S.nextEst=+document.getElementById("sne").value||1;var toCloud=Object.assign({},S);delete toCloud.apiKey;try{await sbUp("fir_settings",{id:"main",data:toCloud});toast("Settings saved and synced!");syncBadge("Synced",true);}catch(e){ls("fir:s",S);toast("Saved locally");}document.getElementById("hbiz").textContent=S.biz;document.getElementById("hcon").textContent=S.phone+" · "+S.email;}
+async function saveSettings(){
+  S.biz=document.getElementById("sb").value||"FixItRick";
+  S.phone=document.getElementById("sp").value;
+  S.email=document.getElementById("se").value;
+  S.web=document.getElementById("sw").value;
+  var ak=document.getElementById("sak").value;
+  S.apiKey=ak;
+  ls("fir:apikey",ak);
+  S.rate=+document.getElementById("sr").value||100;
+  S.markup=+document.getElementById("sm").value||20;
+  S.tax=+document.getElementById("st").value||0;
+  S.terms=document.getElementById("spt").value;
+  S.valid=+document.getElementById("sev").value||30;
+  S.due=+document.getElementById("sid").value||30;
+  S.nextEst=+document.getElementById("sne").value||1;
+  var toCloud=Object.assign({},S);
+  delete toCloud.apiKey;
+  try {
+    var r=await fetch(SURL+"/rest/v1/fir_settings",{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify({id:"main",data:toCloud})});
+    if(r.ok){
+      document.getElementById("hbiz").textContent=S.biz;
+      document.getElementById("hcon").textContent=S.phone+" · "+S.email;
+      syncBadge("Synced",true);
+      toast("Settings saved and synced!");
+    } else {
+      var err=await r.text();
+      console.error("Settings save error:",err);
+      ls("fir:s",S);
+      document.getElementById("hbiz").textContent=S.biz;
+      document.getElementById("hcon").textContent=S.phone+" · "+S.email;
+      toast("Saved locally (sync error)");
+    }
+  } catch(e) {
+    console.error("Settings save exception:",e);
+    ls("fir:s",S);
+    document.getElementById("hbiz").textContent=S.biz;
+    document.getElementById("hcon").textContent=S.phone+" · "+S.email;
+    toast("Saved locally (offline)");
+  }
+}
 function openEF(id){mats=[];labs=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display=S.apiKey?"none":"block";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";addML();addLL();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=e.markupPct||S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));if(!mats.length)addML();if(!labs.length)addLL();updBtns(e.status)}renderMats();renderLabs();calcT();sv("ef")}
 function updBtns(s){document.getElementById("btn-sent").style.display=s==="draft"?"":"none";document.getElementById("btn-appr").style.display=s==="sent"?"":"none";document.getElementById("btn-decl").style.display=s==="sent"?"":"none";document.getElementById("btn-inv").style.display=s==="approved"?"":"none"}
 function addML(){mats.push({id:uid(),name:"",qty:1,unit:0});renderMats();calcT()}
