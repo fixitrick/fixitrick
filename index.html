@@ -202,9 +202,29 @@ function fmt(n){return"$"+(+(n)||0).toFixed(2)}
 function fmtN(n){return"EST-"+String(n).padStart(3,"0")}
 function fmtI(n){return"INV-"+String(n).padStart(3,"0")}
 function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.style.display="block";setTimeout(function(){t.style.display="none"},2200)}
-function load(){
-  var s=ls("fir:s");if(s)S=Object.assign(S,s);
-  ests=ls("fir:e")||[];invs=ls("fir:i")||[];clients=ls("fir:c")||[];exps=ls("fir:x")||[];
+async function load(){
+  var ak=ls("fir:apikey");if(ak)S.apiKey=ak;
+  syncBadge("Syncing...",null);
+  try{
+    var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var rs=await fetch(SURL+"/rest/v1/fir_settings?id=eq.main",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    ests=(await re.json()).map(db2e);
+    invs=(await ri.json()).map(db2i);
+    clients=(await rc.json()).map(db2c);
+    exps=(await rx.json()).map(db2x);
+    var sd=await rs.json();
+    if(sd&&sd[0]&&sd[0].data){S=Object.assign(S,sd[0].data);}
+    S.apiKey=ak||"";
+    syncBadge("Synced",true);
+  }catch(err){
+    console.error("Load error:",err);
+    syncBadge("Offline",false);
+    var s=ls("fir:s");if(s)S=Object.assign(S,s);
+    S.apiKey=ak||"";
+  }
   document.getElementById("hbiz").textContent=S.biz;
   document.getElementById("hcon").textContent=S.phone+" · "+S.email;
   renderDB();
