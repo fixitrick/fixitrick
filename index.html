@@ -149,7 +149,8 @@ textarea{resize:vertical;min-height:64px}
     <button class="bs2" id="btn-sent" style="display:none" onclick="markStat('sent')">Mark Sent</button>
     <button class="bs2" id="btn-appr" style="display:none" onclick="markStat('approved')">Approved</button>
     <button class="bs2" id="btn-decl" style="display:none" onclick="markStat('declined')">Declined</button>
-    <button class="bs2" id="btn-sched" style="display:none" onclick="markStat('scheduled')">Scheduled</button>
+    <button class="bs2" id="btn-sched" style="display:none" onclick="openSchedPicker()">Scheduled</button>
+    <div id="sched-display" style="display:none;font-size:12px;font-weight:600;color:#0c5460;background:#d1ecf1;padding:6px 12px;border-radius:8px;margin-top:4px"></div>
     <button class="bs2" id="btn-inp" style="display:none" onclick="markStat('in_progress')">In Progress</button>
     <button class="bs2" id="btn-comp" style="display:none" onclick="markStat('complete')">Complete</button>
     <button class="bs2" id="btn-inv" style="display:none" onclick="toInvoice()">To Invoice</button>
@@ -222,7 +223,7 @@ var S={biz:"FixItRick Handyman",phone:"614-966-2311",email:"rickh@fixitrick.com"
 function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}else{localStorage.setItem(k,JSON.stringify(v))}}
 // Row mappers
 function e2db(e){return{id:e.id,est_num:e.estNum||"",customer:e.customer||"",phone:e.phone||"",email:e.email||"",address:e.address||"",cat:e.cat||"",description:e.desc||"",notes:e.notes||"",markup_pct:e.markupPct||0,tax_pct:e.taxPct||0,discount:e.discount||0,deposit:e.deposit||0,total:e.total||0,balance:e.balance||0,status:e.status||"draft",mats:e.mats||[],labs:e.labs||[],created_at:e.created||Date.now(),updated_at:Date.now()};}
-function db2e(r){return{id:r.id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,cat:r.cat,desc:r.description,notes:r.notes,markupPct:+r.markup_pct,taxPct:+r.tax_pct,discount:+r.discount,deposit:+r.deposit,total:+r.total,balance:+r.balance,status:r.status,mats:r.mats||[],labs:r.labs||[],created:r.created_at};}
+function db2e(r){return{id:r.id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,cat:r.cat,desc:r.description,notes:r.notes,markupPct:+r.markup_pct,taxPct:+r.tax_pct,discount:+r.discount,deposit:+r.deposit,total:+r.total,balance:+r.balance,status:r.status,mats:r.mats||[],labs:r.labs||[],schedDate:r.sched_date||null,created:r.created_at};}
 function i2db(i){return{id:i.id,inv_num:i.invNum||"",est_id:i.estId||"",est_num:i.estNum||"",customer:i.customer||"",phone:i.phone||"",email:i.email||"",address:i.address||"",total:i.total||0,balance:i.balance||0,deposit:i.deposit||0,notes:i.notes||"",mats:i.mats||[],labs:i.labs||[],paid:i.paid||false,due_date:i.dueDate||0,created_at:i.created||Date.now()};}
 function db2i(r){return{id:r.id,invNum:r.inv_num,estId:r.est_id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,total:+r.total,balance:+r.balance,deposit:+r.deposit,notes:r.notes,mats:r.mats||[],labs:r.labs||[],paid:r.paid,dueDate:r.due_date,created:r.created_at};}
 function c2db(c){return{id:c.id,name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",created_at:c.created||Date.now()};}
@@ -354,7 +355,10 @@ async function saveSettings(){
     toast("Saved locally (offline)");
   }
 }
-function openEF(id){mats=[];labs=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display=S.apiKey?"none":"block";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";addML();addLL();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=e.markupPct||S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));if(!mats.length)addML();if(!labs.length)addLL();updBtns(e.status)}renderMats();renderLabs();calcT();sv("ef")}
+function openEF(id){mats=[];labs=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display=S.apiKey?"none":"block";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}addML();addLL();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=e.markupPct||S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));if(!mats.length)addML();if(!labs.length)addLL();updBtns(e.status);
+    // Show scheduled date if set
+    var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}
+    if(e.schedDate){showSchedDate(e.schedDate);}}renderMats();renderLabs();calcT();sv("ef")}
 function updBtns(s){
   var sent=document.getElementById("btn-sent"),appr=document.getElementById("btn-appr"),decl=document.getElementById("btn-decl");
   var sched=document.getElementById("btn-sched"),inp=document.getElementById("btn-inp"),comp=document.getElementById("btn-comp"),inv=document.getElementById("btn-inv");
@@ -527,6 +531,65 @@ function printInv(id){var inv=null;for(var i=0;i<invs.length;i++){if(invs[i].id=
 async function runAI(){if(!S.apiKey){toast("Add API key in Settings");return}var desc=document.getElementById("fjd").value,cat=document.getElementById("fjc").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Estimating...";try{var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,messages:[{role:"user",content:"You are an experienced handyman estimator in Columbus, Ohio. Job: \""+( cat?cat+": ":"")+desc+"\".\n\nEstimate using current Columbus OH retail prices (Home Depot/Menards). Every material MUST have a realistic non-zero unit price.\n\nReturn ONLY valid JSON:\n{\"materials\":[{\"name\":\"specific item name with size/type\",\"qty\":1,\"unit\":12.99}],\"labor\":[{\"name\":\"task\",\"hrs\":1.5,\"rate\":"+S.rate+"}]}\n\nCritical rules: unit price must be > 0 for every material. Use real current prices. Labor rate $"+S.rate+"/hr."}]})});var d=await r.json();var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var j=JSON.parse(raw);if(j.materials){mats=j.materials.map(function(m){return{id:uid(),name:m.name,qty:m.qty||1,unit:+(m.unit)||0}});renderMats()}if(j.labor){labs=j.labor.map(function(l){return{id:uid(),name:l.name,hrs:+(l.hrs)||1,rate:+(l.rate)||S.rate}});renderLabs()}setTimeout(function(){calcT();},100);document.getElementById("aistat").textContent="";toast("AI estimate ready!")}catch(e){document.getElementById("aistat").textContent="Error: "+e.message;console.error(e)}}
 async function runUpsells(){if(!S.apiKey){toast("Add API key in Settings");return}var desc=document.getElementById("fjd").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Finding upsells...";try{var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,messages:[{role:"user",content:"Job: \""+desc+"\". Suggest 3-4 upsell add-ons. ONLY JSON: [{title,desc,price}]"}]})});var d=await r.json();var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var items=JSON.parse(raw);document.getElementById("ulist").innerHTML=items.map(function(u){return"<div style=margin-bottom:8px><strong style=font-size:12px;color:#2d6a32>"+u.title+"</strong> <span style=color:var(--au);font-size:11px;font-weight:700>"+u.price+"</span><div style=font-size:11px;color:#555;margin-top:2px>"+u.desc+"</div></div>"}).join("");document.getElementById("ubox").style.display="block";document.getElementById("aistat").textContent=""}catch(e){document.getElementById("aistat").textContent="Error";console.error(e)}}
 load();
+
+// ── SCHEDULE PICKER ──────────────────────────────────────────────────────────
+function openSchedPicker(){
+  var id=document.getElementById("feid").value;
+  if(!id){toast("Save first");return}
+  // Pre-fill date to today
+  var today=new Date();
+  var dd=String(today.getDate()).padStart(2,"0");
+  var mm=String(today.getMonth()+1).padStart(2,"0");
+  document.getElementById("sched-date").value=today.getFullYear()+"-"+mm+"-"+dd;
+  document.getElementById("sched-time").value="08:00";
+  var m=document.getElementById("sched-modal");
+  m.style.display="flex";
+}
+function closeSchedPicker(){
+  document.getElementById("sched-modal").style.display="none";
+}
+async function confirmSched(){
+  var id=document.getElementById("feid").value;
+  if(!id)return;
+  var dt=document.getElementById("sched-date").value;
+  var tm=document.getElementById("sched-time").value;
+  if(!dt){toast("Pick a date");return}
+  var schedTs=new Date(dt+"T"+(tm||"08:00")).getTime();
+  for(var i=0;i<ests.length;i++){
+    if(ests[i].id===id){
+      ests[i].status="scheduled";
+      ests[i].schedDate=schedTs;
+      try{await sbUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs}));syncBadge("Synced",true);}catch(e){}
+      break;
+    }
+  }
+  document.getElementById("fstat").value="scheduled";
+  closeSchedPicker();
+  updBtns("scheduled");
+  // Show scheduled date on the form
+  showSchedDate(schedTs);
+  toast("Scheduled for "+new Date(schedTs).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}));
+}
+function showSchedDate(ts){
+  var el=document.getElementById("sched-display");
+  if(el&&ts){
+    el.textContent="📅 Scheduled: "+new Date(ts).toLocaleString([],{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    el.style.display="block";
+  }
+}
 </script>
+
+<!-- Schedule Picker Modal -->
+<div id="sched-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:16px;padding:1.4rem;width:92%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+    <div style="font-size:15px;font-weight:700;margin-bottom:1rem;color:var(--text)">Schedule This Job</div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Date</label><input type="date" id="sched-date" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:1.1rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Time</label><input type="time" id="sched-time" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="display:flex;gap:8px">
+      <button class="bp" style="flex:1" onclick="confirmSched()">Confirm</button>
+      <button class="bs2" style="flex:1" onclick="closeSchedPicker()">Cancel</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
