@@ -459,9 +459,16 @@ function buildPrint(d,type,docNum,footer){
   return '<!DOCTYPE html><html><head><title>'+docNum+'</title>'+
   '<meta name="viewport" content="width=device-width">'+
   '<style>'+
-  '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+
+  '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.no-print{display:none!important}}'+
   'body{font-family:Arial,sans-serif;max-width:720px;margin:0 auto;color:#222;font-size:14px;padding:20px}'+
+  '.no-print{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px}'+
+  '.no-print button{padding:9px 18px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}'+
+  '.btn-print{background:#283010;color:#c8a048}.btn-close{background:#f0f0f0;color:#333}'+
   '</style></head><body>'+
+  '<div class="no-print">'+
+  '<button class="btn-close" onclick="window.close()">← Back to App</button>'+
+  '<button class="btn-print" onclick="window.print()">🖨 Print</button>'+
+  '</div>'+
 
   // HEADER - full width green bar with logo left, doc type right
   '<div style="background:#283010;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0;border-radius:8px 8px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+
