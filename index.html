@@ -436,17 +436,6 @@ function renderLL(){
   }).join(""):q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>';
   var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
 }
-  var statOrder={new:0,contacted:1,quoted:2,won:3,lost:4};
-  var sorted=[].concat(leads).sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
-  document.getElementById("llist").innerHTML=sorted.length?sorted.map(function(l){
-    var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
-    var isOpen=l.status!=="won"&&l.status!=="lost";
-    var age=ageLabel(l.created);
-    var border=ageBorder(l.created);
-    var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
-    return"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div style=\"flex:1;min-width:160px\"><div class=\"lin\">"+l.name+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span></div><div class=\"lim\">"+(l.source||"")+(l.phone?" · "+l.phone:"")+(l.jobDesc?"<br>"+l.jobDesc.slice(0,60)+(l.jobDesc.length>60?"...":""):"")+"</div></div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"convertLead('"+l.id+"')\">→ Estimate</button>":"")+"</div></div>";
-  }).join(""):"<div class=\"es\">No leads yet — they come from your website contact form</div>";
-}
 
 async function loadOlder(tab){
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Loading...";}
