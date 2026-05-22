@@ -107,7 +107,7 @@ textarea{resize:vertical;min-height:64px}
   </div>
 <div class="card"><div class="ct">Recent Activity</div><div id="dact"></div></div>
 </div>
-<div id="v-est" class="view"><div class="sh"><h2>Estimates</h2><button class="bp" onclick="openEF(null)">+ New</button></div><div class="card"><div id="elist"></div></div></div>
+<div id="v-est" class="view"><div class="sh"><h2>Estimates</h2><button class="bp" onclick="openEF(null)">+ New</button></div><div class="card"><input id="est-search" placeholder="Search by name..." oninput="renderEL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="elist"></div><div id="est-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('est')">Load older records</button></div></div></div>
 <div id="v-ef" class="view">
   <div class="sh"><h2 id="eftitle">New Estimate</h2><button class="bs2" onclick="sv('est')">Back</button></div>
   <div class="card"><div class="ct">Customer</div>
@@ -156,7 +156,7 @@ textarea{resize:vertical;min-height:64px}
     <button class="bs2" id="btn-inv" style="display:none" onclick="toInvoice()">To Invoice</button>
   </div>
 </div>
-<div id="v-inv" class="view"><div class="sh"><h2>Invoices</h2></div><div class="card"><div id="ilist"></div></div></div>
+<div id="v-inv" class="view"><div class="sh"><h2>Invoices</h2></div><div class="card"><input id="inv-search" placeholder="Search by name..." oninput="renderIL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="ilist"></div><div id="inv-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('inv')">Load older records</button></div></div></div>
 <div id="v-cli" class="view">
   <div class="sh"><h2>Clients</h2><button class="bp" onclick="toggleCF()">+ Add</button></div>
   <div class="card" id="cform" style="display:none"><div class="ct">New Client</div>
@@ -164,7 +164,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="r2"><div class="mb"><label>Email</label><input id="cle" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Address</label><input id="cla" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveClient()">Save</button><button class="bs2" onclick="toggleCF()">Cancel</button></div>
   </div>
-  <div class="card"><div id="clist"></div></div>
+  <div class="card"><input id="cli-search" placeholder="Search clients..." oninput="renderCL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="clist"></div></div>
 </div>
 <div id="v-exp" class="view">
   <div class="sh"><h2>Expenses</h2><button class="bp" onclick="toggleEF()">+ Log</button></div>
@@ -184,7 +184,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="mb"><label>Job Description</label><textarea id="llj" placeholder="What do they need done?" style="min-height:56px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveLead()">Save Lead</button><button class="bs2" onclick="toggleLF()">Cancel</button></div>
   </div>
-  <div class="card"><div id="llist"></div></div>
+  <div class="card"><input id="lead-search" placeholder="Search leads..." oninput="renderLL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="llist"></div><div id="lead-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('lead')">Load older records</button></div></div>
 </div>
 <div id="v-set" class="view">
   <div class="sh"><h2>Settings</h2></div>
@@ -211,6 +211,7 @@ textarea{resize:vertical;min-height:64px}
 var SURL="https://dzfxbxgzvgnqbkmhvprj.supabase.co";
 var SKEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6ZnhieGd6dmducWJrbWh2cHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDg2NTMsImV4cCI6MjA5NDQyNDY1M30.CzcS7AO9kGzHG-N_beqNk7wsFpcHhTdpdlyjEbni01s";
 var ests=[],invs=[],clients=[],exps=[],leads=[],mats=[],labs=[];
+var estAllLoaded=false,invAllLoaded=false,leadAllLoaded=false;
 var _synced=false;
 
 // Supabase helpers
@@ -243,11 +244,12 @@ async function load(){
   var ak=ls("fir:apikey");if(ak)S.apiKey=ak;
   syncBadge("Syncing...",null);
   try{
-    var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var cutoff=Date.now()-90*24*60*60*1000;
+    var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
     var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
     var rs=await fetch(SURL+"/rest/v1/fir_settings?id=eq.main",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
     ests=(await re.json()).map(db2e);
     invs=(await ri.json()).map(db2i);
@@ -310,9 +312,9 @@ function renderDB(){
   var recent=[].concat(ests.map(function(e){return{date:e.created,text:(e.estNum||"")+" - "+(e.customer||""),sub:fmt(e.total),status:e.status}}),invs.map(function(i){return{date:i.created,text:(i.invNum||"")+" - "+(i.customer||""),sub:fmt(i.total),status:i.paid?"paid":"unpaid"}})).sort(function(a,b){return b.date-a.date}).slice(0,8);
   document.getElementById("dact").innerHTML=recent.length?recent.map(function(r){return"<div class=\"li\"><div><div class=\"lin\">"+r.text+"</div><div class=\"lim\">"+r.sub+" · "+new Date(r.date).toLocaleDateString()+"</div></div><span class=\"badge "+r.status+"\">"+r.status+"</span></div>"}).join(""):"<div class=\"es\">No activity yet</div>";
 }
-function renderEL(){document.getElementById("elist").innerHTML=ests.length?[].concat(ests).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"openEF('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+(e.estNum||"")+(e.customer?" - "+e.customer:"")+"</div><div class=\"lim\">"+fmt(e.total)+" · "+new Date(e.created).toLocaleDateString()+"</div></div><span class=\"badge "+e.status+"\">"+e.status+"</span></div>"}).join(""):"<div class=\"es\">No estimates yet</div>"}
-function renderIL(){document.getElementById("ilist").innerHTML=invs.length?[].concat(invs).reverse().map(function(i){return"<div class=\"li\"><div style=\"flex:1\"><div class=\"lin\">"+(i.invNum||"")+" - "+(i.customer||"")+"</div><div class=\"lim\">"+fmt(i.total)+" · Due "+new Date(i.dueDate).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+(i.paid?"paid":"unpaid")+"\">"+( i.paid?"paid":"unpaid")+"</span>"+(!i.paid?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"markPaid('"+i.id+"')\" >Mark Paid</button>":"")+"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"printInv('"+i.id+"')\" >Print</button></div></div>"}).join(""):"<div class=\"es\">No invoices yet</div>"}
-function renderCL(){document.getElementById("clist").innerHTML=clients.length?clients.map(function(c){return"<div class=\"li\"><div><div class=\"lin\">"+c.name+"</div><div class=\"lim\">"+(c.phone||"")+" "+(c.email||"")+"</div></div><button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"estFromClient('"+c.id+"')\" >+ Est</button></div>"}).join(""):"<div class=\"es\">No clients</div>"}
+function renderEL(){var q=(document.getElementById("est-search")||{}).value||"";var list=[].concat(ests).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(e){return(e.customer||"").toLowerCase().includes(ql)||(e.estNum||"").toLowerCase().includes(ql);})}document.getElementById("elist").innerHTML=list.length?list.map(function(e){return'<div class="li"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+(e.estNum||"")+(e.customer?" - "+e.customer:"")+"</div><div class=\"lim\">"+fmt(e.total)+" · "+new Date(e.created).toLocaleDateString()+"</div></div><span class=\"badge "+e.status+"\">"+e.status+'</span></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No estimates yet</div>';var older=document.getElementById("est-older");if(older)older.style.display=estAllLoaded?"none":"block";}
+function renderIL(){var q=(document.getElementById("inv-search")||{}).value||"";var list=[].concat(invs).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(i){return(i.customer||"").toLowerCase().includes(ql)||(i.invNum||"").toLowerCase().includes(ql);})}document.getElementById("ilist").innerHTML=list.length?list.map(function(i){return'<div class="li"><div style="flex:1"><div class="lin">'+(i.invNum||"")+" - "+(i.customer||"")+"</div><div class=\"lim\">"+fmt(i.total)+" · Due "+new Date(i.dueDate).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+(i.paid?"paid":"unpaid")+"\">"+( i.paid?"paid":"unpaid")+"</span>"+(!i.paid?'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="markPaid(\''+i.id+'\')" >Mark Paid</button>':"")+'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="printInv(\''+i.id+'\')" >Print</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No invoices yet</div>';var older=document.getElementById("inv-older");if(older)older.style.display=invAllLoaded?"none":"block";}
+function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";var list=clients;if(q){var ql=q.toLowerCase();list=list.filter(function(c){return(c.name||"").toLowerCase().includes(ql)||(c.phone||"").toLowerCase().includes(ql);})}document.getElementById("clist").innerHTML=list.length?list.map(function(c){return'<div class="li"><div><div class="lin">'+c.name+"</div><div class=\"lim\">"+(c.phone||"")+" "+(c.email||"")+"</div></div><button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"estFromClient('"+c.id+"')\" >+ Est</button></div>"}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No clients</div>'}
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div><div class=\"lin\">"+(e.desc||e.cat)+"</div><div class=\"lim\">"+e.cat+" · "+e.date+"</div></div><span class=\"lia\">"+fmt(e.amount)+"</span></div>"}).join(""):"<div class=\"es\">No expenses</div>"}
 function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sak").value=S.apiKey||"";document.getElementById("sr").value=S.rate||100;document.getElementById("sm").value=S.markup||20;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=S.valid||30;document.getElementById("sid").value=S.due||30;document.getElementById("sne").value=S.nextEst||1}
 async function saveSettings(){
@@ -420,6 +422,20 @@ function convertLead(id){
 function ageLabel(ts){var m=Math.round((Date.now()-ts)/60000);if(m<60)return m+"m ago";var h=Math.round(m/60);if(h<24)return h+"h ago";return Math.floor(h/24)+"d ago";}
 function ageBorder(ts){var h=(Date.now()-ts)/3600000;if(h>48)return"border-left:3px solid #dc3545";if(h>24)return"border-left:3px solid #fd7e14";return"border-left:3px solid #28a745";}
 function renderLL(){
+  var q=(document.getElementById("lead-search")||{}).value||"";
+  var statOrder={new:0,contacted:1,quoted:2,won:3,lost:4};
+  var list=[].concat(leads).sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
+  if(q){var ql=q.toLowerCase();list=list.filter(function(l){return(l.name||"").toLowerCase().includes(ql)||(l.jobDesc||"").toLowerCase().includes(ql)||(l.phone||"").toLowerCase().includes(ql);})}
+  document.getElementById("llist").innerHTML=list.length?list.map(function(l){
+    var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
+    var isOpen=l.status!=="won"&&l.status!=="lost";
+    var age=ageLabel(l.created);
+    var border=ageBorder(l.created);
+    var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
+    return"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div style=\"flex:1;min-width:160px\"><div class=\"lin\">"+l.name+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span></div><div class=\"lim\">"+(l.source||"")+(l.phone?" · "+l.phone:"")+(l.jobDesc?"<br>"+l.jobDesc.slice(0,60)+(l.jobDesc.length>60?"...":""):"")+"</div></div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"convertLead('"+l.id+"')\">→ Estimate</button>":"")+"</div></div>";
+  }).join(""):q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>';
+  var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
+}
   var statOrder={new:0,contacted:1,quoted:2,won:3,lost:4};
   var sorted=[].concat(leads).sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
   document.getElementById("llist").innerHTML=sorted.length?sorted.map(function(l){
@@ -430,6 +446,24 @@ function renderLL(){
     var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
     return"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div style=\"flex:1;min-width:160px\"><div class=\"lin\">"+l.name+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span></div><div class=\"lim\">"+(l.source||"")+(l.phone?" · "+l.phone:"")+(l.jobDesc?"<br>"+l.jobDesc.slice(0,60)+(l.jobDesc.length>60?"...":""):"")+"</div></div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"convertLead('"+l.id+"')\">→ Estimate</button>":"")+"</div></div>";
   }).join(""):"<div class=\"es\">No leads yet — they come from your website contact form</div>";
+}
+
+async function loadOlder(tab){
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Loading...";}
+  try{
+    var h={"apikey":SKEY,"Authorization":"Bearer "+SKEY};
+    if(tab==="est"){
+      var r=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc",{headers:h});
+      ests=(await r.json()).map(db2e);estAllLoaded=true;renderEL();
+    }else if(tab==="inv"){
+      var r=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc",{headers:h});
+      invs=(await r.json()).map(db2i);invAllLoaded=true;renderIL();
+    }else if(tab==="lead"){
+      var r=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc",{headers:h});
+      try{leads=(await r.json()).map(db2l);}catch(e){leads=[];}leadAllLoaded=true;renderLL();
+    }
+    syncBadge("Synced",true);
+  }catch(e){syncBadge("Error",false);if(btn){btn.disabled=false;btn.textContent="Load older records";}}
 }
 function toggleCF(){var f=document.getElementById("cform");f.style.display=f.style.display==="none"?"block":"none"}
 function toggleEF(){var f=document.getElementById("eform");f.style.display=f.style.display==="none"?"block":"none";if(f.style.display==="block")document.getElementById("exd").value=new Date().toISOString().split("T")[0]}
