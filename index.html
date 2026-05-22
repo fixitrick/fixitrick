@@ -294,10 +294,10 @@ function renderDB(){
   var appr=ests.filter(function(e){return e.status==="approved"}).length;
   var decl=ests.filter(function(e){return e.status==="declined"}).length;
   var pend=ests.filter(function(e){return e.status==="draft"||e.status==="sent"}).length;
-  var wr=ests.length>0?Math.round(appr/ests.length*100):0;
-  document.getElementById("dwr").textContent=ests.length>0?wr+"%":"--";
+  var decided=appr+decl;var wr=decided>0?Math.round(appr/decided*100):0;
+  document.getElementById("dwr").textContent=decided>0?wr+"%":"--";
   document.getElementById("dwf").style.width=wr+"%";
-  document.getElementById("dwsub").textContent=ests.length>0?(appr+" won · "+decl+" lost · "+pend+" open"):"Create your first estimate";
+  document.getElementById("dwsub").textContent=decided>0?(appr+" won · "+decl+" lost · "+pend+" open"):ests.length>0?"No decided estimates yet":"Create your first estimate";
   var st={};ests.forEach(function(e){st[e.status]=(st[e.status]||0)+1});
   document.getElementById("dpipe").innerHTML=Object.keys(st).map(function(k){return"<span class=\"badge "+k+"\">"+k+"</span> <strong>"+st[k]+"</strong>"}).join("<br>");
 
