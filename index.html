@@ -669,11 +669,17 @@ async function confirmSched(){
   var tm=document.getElementById("sched-time").value;
   if(!dt){toast("Pick a date");return}
   var schedTs=new Date(dt+"T"+(tm||"08:00")).getTime();
+  var zohoOk=true;
   for(var i=0;i<ests.length;i++){
     if(ests[i].id===id){
       ests[i].status="scheduled";
       ests[i].schedDate=schedTs;
       try{await sbUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs}));syncBadge("Synced",true);}catch(e){}
+      try{
+        var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+SKEY,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
+        var zj=await zr.json();
+        if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
+      }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
       break;
     }
   }
@@ -682,7 +688,7 @@ async function confirmSched(){
   updBtns("scheduled");
   // Show scheduled date on the form
   showSchedDate(schedTs);
-  toast("Scheduled for "+new Date(schedTs).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}));
+  toast(zohoOk?("Scheduled for "+new Date(schedTs).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})):"Scheduled, but calendar sync failed");
 }
 function showSchedDate(ts){
   var el=document.getElementById("sched-display");
