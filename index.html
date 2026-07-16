@@ -383,7 +383,8 @@ function updBtns(s){
   sent.style.display=s==="draft"?"":"none";
   appr.style.display=s==="sent"?"":"none";
   decl.style.display=s==="sent"?"":"none";
-  sched.style.display=s==="approved"?"":"none";
+  sched.style.display=(s==="approved"||s==="scheduled")?"":"none";
+  if(sched)sched.textContent=s==="scheduled"?"Reschedule":"Scheduled";
   inp.style.display=s==="scheduled"?"":"none";
   comp.style.display=s==="in_progress"?"":"none";
   inv.style.display=(s==="approved"||s==="scheduled"||s==="in_progress"||s==="complete")?"":"none";
