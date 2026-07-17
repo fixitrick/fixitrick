@@ -88,6 +88,7 @@ textarea{resize:vertical;min-height:64px}
 <nav class="nav">
   <button class="nb on" onclick="sv('db')">Dashboard</button>
   <button class="nb" onclick="sv('est')">Estimates</button>
+  <button class="nb" onclick="sv('sched')">Schedule</button>
   <button class="nb" onclick="sv('inv')">Invoices</button>
   <button class="nb" onclick="sv('cli')">Clients</button>
   <button class="nb" onclick="sv('exp')">Expenses</button>
@@ -108,6 +109,7 @@ textarea{resize:vertical;min-height:64px}
 <div class="card"><div class="ct">Recent Activity</div><div id="dact"></div></div>
 </div>
 <div id="v-est" class="view"><div class="sh"><h2>Estimates</h2><button class="bp" onclick="openEF(null)">+ New</button></div><div class="card"><input id="est-search" placeholder="Search by name..." oninput="renderEL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="elist"></div><div id="est-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('est')">Load older records</button></div></div></div>
+<div id="v-sched" class="view"><div class="sh"><h2>Schedule</h2></div><div class="card"><div id="schedlist"></div></div></div>
 <div id="v-ef" class="view">
   <div class="sh"><h2 id="eftitle">New Estimate</h2><button class="bs2" onclick="sv('est')">Back</button></div>
   <div class="card"><div class="ct">Customer</div>
@@ -232,8 +234,8 @@ function syncBadge(msg,ok){var el=document.getElementById("synclbl");if(el){el.t
 var S={biz:"FixItRick Handyman",phone:"614-966-2311",email:"rickh@fixitrick.com",web:"fixitrick.com",apiKey:"",rate:100,markup:20,tax:0,terms:"Payment due within 30 days. Checks payable to Rick H.\nVenmo/Zelle: 614-966-2311",valid:30,due:30,nextEst:1};
 function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}else{localStorage.setItem(k,JSON.stringify(v))}}
 // Row mappers
-function e2db(e){return{id:e.id,est_num:e.estNum||"",customer:e.customer||"",phone:e.phone||"",email:e.email||"",address:e.address||"",cat:e.cat||"",description:e.desc||"",notes:e.notes||"",markup_pct:e.markupPct||0,tax_pct:e.taxPct||0,discount:e.discount||0,deposit:e.deposit||0,total:e.total||0,balance:e.balance||0,status:e.status||"draft",mats:e.mats||[],labs:e.labs||[],created_at:e.created||Date.now(),updated_at:Date.now(),emailed_at:e.emailedAt||null,emailed_to:e.emailedTo||null};}
-function db2e(r){return{id:r.id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,cat:r.cat,desc:r.description,notes:r.notes,markupPct:+r.markup_pct,taxPct:+r.tax_pct,discount:+r.discount,deposit:+r.deposit,total:+r.total,balance:+r.balance,status:r.status,mats:r.mats||[],labs:r.labs||[],schedDate:r.sched_date||null,emailedAt:r.emailed_at||null,emailedTo:r.emailed_to||null,created:r.created_at};}
+function e2db(e){return{id:e.id,est_num:e.estNum||"",customer:e.customer||"",phone:e.phone||"",email:e.email||"",address:e.address||"",cat:e.cat||"",description:e.desc||"",notes:e.notes||"",markup_pct:e.markupPct||0,tax_pct:e.taxPct||0,discount:e.discount||0,deposit:e.deposit||0,total:e.total||0,balance:e.balance||0,status:e.status||"draft",mats:e.mats||[],labs:e.labs||[],created_at:e.created||Date.now(),updated_at:Date.now(),emailed_at:e.emailedAt||null,emailed_to:e.emailedTo||null,zoho_sync_ok:e.zohoSyncOk!==false};}
+function db2e(r){return{id:r.id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,cat:r.cat,desc:r.description,notes:r.notes,markupPct:+r.markup_pct,taxPct:+r.tax_pct,discount:+r.discount,deposit:+r.deposit,total:+r.total,balance:+r.balance,status:r.status,mats:r.mats||[],labs:r.labs||[],schedDate:r.sched_date||null,emailedAt:r.emailed_at||null,emailedTo:r.emailed_to||null,zohoSyncOk:r.zoho_sync_ok!==false,created:r.created_at};}
 function i2db(i){return{id:i.id,inv_num:i.invNum||"",est_id:i.estId||"",est_num:i.estNum||"",customer:i.customer||"",phone:i.phone||"",email:i.email||"",address:i.address||"",total:i.total||0,balance:i.balance||0,deposit:i.deposit||0,notes:i.notes||"",mats:i.mats||[],labs:i.labs||[],paid:i.paid||false,due_date:i.dueDate||0,created_at:i.created||Date.now(),emailed_at:i.emailedAt||null,emailed_to:i.emailedTo||null};}
 function db2i(r){return{id:r.id,invNum:r.inv_num,estId:r.est_id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,total:+r.total,balance:+r.balance,deposit:+r.deposit,notes:r.notes,mats:r.mats||[],labs:r.labs||[],paid:r.paid,dueDate:r.due_date,emailedAt:r.emailed_at||null,emailedTo:r.emailed_to||null,created:r.created_at};}
 function c2db(c){return{id:c.id,name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",created_at:c.created||Date.now()};}
@@ -284,10 +286,10 @@ function sv(view){
   document.querySelectorAll(".view").forEach(function(v){v.classList.remove("on")});
   document.querySelectorAll(".nb").forEach(function(b){b.classList.remove("on")});
   var el=document.getElementById("v-"+view);if(el)el.classList.add("on");
-  var map={db:0,est:1,ef:1,inv:2,cli:3,exp:4,leads:5,set:6};
+  var map={db:0,est:1,ef:1,sched:2,inv:3,cli:4,exp:5,leads:6,set:7};
   var btns=document.querySelectorAll(".nb");
   if(map[view]!==undefined)btns[map[view]].classList.add("on");
-  if(view==="db")renderDB();else if(view==="est")renderEL();else if(view==="inv")renderIL();
+  if(view==="db")renderDB();else if(view==="est")renderEL();else if(view==="sched")renderSched();else if(view==="inv")renderIL();
   else if(view==="cli")renderCL();else if(view==="exp")renderXL();else if(view==="leads")renderLL();else if(view==="set")loadSet();
   window.scrollTo(0,0);
 }
@@ -376,7 +378,7 @@ function openEF(id){mats=[];labs=[];document.getElementById("ubox").style.displa
     var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}
     var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}
     if(e.emailedAt){showEmailStatus(e.emailedAt,e.emailedTo);}
-    if(e.schedDate){showSchedDate(e.schedDate);}}renderMats();renderLabs();calcT();sv("ef")}
+    if(e.schedDate){showSchedDate(e.schedDate,e.zohoSyncOk);}}renderMats();renderLabs();calcT();sv("ef")}
 function updBtns(s){
   var sent=document.getElementById("btn-sent"),appr=document.getElementById("btn-appr"),decl=document.getElementById("btn-decl");
   var sched=document.getElementById("btn-sched"),inp=document.getElementById("btn-inp"),comp=document.getElementById("btn-comp"),inv=document.getElementById("btn-inv");
@@ -658,6 +660,39 @@ function openSchedPicker(){
   document.getElementById("sched-time").value="08:00";
   var m=document.getElementById("sched-modal");
   m.style.display="flex";
+  updateSchedContext();
+}
+function updateSchedContext(){
+  var id=document.getElementById("feid").value;
+  var dt=document.getElementById("sched-date").value;
+  var box=document.getElementById("sched-context");
+  if(!box)return;
+  if(!dt){box.innerHTML="";return}
+  var sameDay=ests.filter(function(e){
+    if(e.id===id||!e.schedDate)return false;
+    if(e.status!=="scheduled"&&e.status!=="in_progress")return false;
+    var eDate=new Date(e.schedDate).toLocaleDateString("en-CA");
+    return eDate===dt;
+  }).sort(function(a,b){return a.schedDate-b.schedDate;});
+  var upcoming=ests.filter(function(e){
+    return e.id!==id&&e.schedDate&&(e.status==="scheduled"||e.status==="in_progress")&&e.schedDate>=Date.now();
+  }).sort(function(a,b){return a.schedDate-b.schedDate;}).slice(0,4);
+  var html="";
+  if(sameDay.length){
+    html+='<div style="font-weight:700;color:#b8860b;margin-bottom:4px">⚠ Already booked this day:</div>';
+    html+=sameDay.map(function(e){
+      return '<div style="padding:2px 0">'+new Date(e.schedDate).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+" \u2014 "+esc(e.customer||"")+"</div>";
+    }).join("");
+  }else{
+    html+='<div style="color:#28a745;font-weight:600;margin-bottom:4px">✓ Nothing else booked this day</div>';
+  }
+  if(upcoming.length){
+    html+='<div style="font-weight:700;color:var(--muted);margin-top:6px;margin-bottom:2px">Next up overall:</div>';
+    html+=upcoming.map(function(e){
+      return '<div style="padding:1px 0;color:var(--muted)">'+new Date(e.schedDate).toLocaleDateString([],{month:"short",day:"numeric"})+" "+new Date(e.schedDate).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+" \u2014 "+esc(e.customer||"")+"</div>";
+    }).join("");
+  }
+  box.innerHTML=html;
 }
 function closeSchedPicker(){
   document.getElementById("sched-modal").style.display="none";
@@ -680,6 +715,8 @@ async function confirmSched(){
         var zj=await zr.json();
         if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
       }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
+      ests[i].zohoSyncOk=zohoOk;
+      try{await sbUp("fir_estimates",Object.assign(e2db(ests[i]),{zoho_sync_ok:zohoOk}));}catch(e){}
       break;
     }
   }
@@ -687,15 +724,51 @@ async function confirmSched(){
   closeSchedPicker();
   updBtns("scheduled");
   // Show scheduled date on the form
-  showSchedDate(schedTs);
+  showSchedDate(schedTs,zohoOk);
   toast(zohoOk?("Scheduled for "+new Date(schedTs).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})):"Scheduled, but calendar sync failed");
 }
-function showSchedDate(ts){
+function showSchedDate(ts,syncOk){
   var el=document.getElementById("sched-display");
   if(el&&ts){
-    el.textContent="📅 Scheduled: "+new Date(ts).toLocaleString([],{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    var dateStr="📅 Scheduled: "+new Date(ts).toLocaleString([],{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    if(syncOk===false){
+      el.innerHTML=dateStr+' <span style="color:#b8860b;font-weight:700">⚠ Calendar sync failed</span> <button class="bs2" style="padding:2px 8px;font-size:11px" onclick="retryZohoSync(document.getElementById(\'feid\').value)">Retry</button>';
+    }else{
+      el.textContent=dateStr;
+    }
     el.style.display="block";
   }
+}
+async function retryZohoSync(id){
+  if(!id)return;
+  toast("Retrying calendar sync...");
+  var ok=true;
+  try{
+    var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+SKEY,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
+    var zj=await zr.json();
+    if(!zj.ok){console.error("Zoho retry failed:",zj.error);ok=false;}
+  }catch(e){console.error("Zoho retry error:",e);ok=false;}
+  for(var i=0;i<ests.length;i++){
+    if(ests[i].id===id){
+      ests[i].zohoSyncOk=ok;
+      try{await sbUp("fir_estimates",Object.assign(e2db(ests[i]),{zoho_sync_ok:ok}));}catch(e){}
+      if(document.getElementById("feid")&&document.getElementById("feid").value===id)showSchedDate(ests[i].schedDate,ok);
+      break;
+    }
+  }
+  toast(ok?"Calendar synced!":"Still failing \u2014 check Zoho connection");
+  if(document.getElementById("v-sched").classList.contains("on"))renderSched();
+}
+function renderSched(){
+  var list=ests.filter(function(e){return e.schedDate&&(e.status==="scheduled"||e.status==="in_progress");}).sort(function(a,b){return a.schedDate-b.schedDate;});
+  document.getElementById("schedlist").innerHTML=list.length?list.map(function(e){
+    var d=new Date(e.schedDate);
+    var dayLabel=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
+    var timeLabel=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+    var overdue=e.schedDate<Date.now()&&e.status==="scheduled";
+    var syncBadge=e.zohoSyncOk===false?'<span style="color:#b8860b;font-weight:700;font-size:11px">⚠ sync failed</span> <button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();retryZohoSync(\''+e.id+'\')">Retry</button>':'<span style="color:#28a745;font-size:11px">✓ synced</span>';
+    return '<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+esc(e.address):"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge '+e.status+'">'+e.status+"</span></div></div>";
+  }).join(""):'<div class="es">No upcoming scheduled jobs</div>';
 }
 </script>
 
@@ -703,8 +776,9 @@ function showSchedDate(ts){
 <div id="sched-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
   <div style="background:var(--card);border-radius:16px;padding:1.4rem;width:92%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
     <div style="font-size:15px;font-weight:700;margin-bottom:1rem;color:var(--text)">Schedule This Job</div>
-    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Date</label><input type="date" id="sched-date" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
-    <div style="margin-bottom:1.1rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Time</label><input type="time" id="sched-time" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Date</label><input type="date" id="sched-date" oninput="updateSchedContext()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Time</label><input type="time" id="sched-time" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div id="sched-context" style="margin-bottom:1.1rem;font-size:12px;background:var(--bg);border-radius:8px;padding:8px 10px;max-height:120px;overflow-y:auto"></div>
     <div style="display:flex;gap:8px">
       <button class="bp" style="flex:1" onclick="confirmSched()">Confirm</button>
       <button class="bs2" style="flex:1" onclick="closeSchedPicker()">Cancel</button>
