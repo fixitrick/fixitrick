@@ -231,6 +231,54 @@ async function sbDel(table,id){var r=await fetch(SURL+"/rest/v1/"+table+"?id=eq.
 
 function syncBadge(msg,ok){var el=document.getElementById("synclbl");if(el){el.textContent=msg;el.style.color=ok===true?"#155724":ok===false?"#721c24":"#999";}}
 
+// --- Offline write queue ---
+var Q_KEY="fir:queue";
+function qLoad(){try{return JSON.parse(localStorage.getItem(Q_KEY))||[]}catch(e){return []}}
+function qSave(q){try{localStorage.setItem(Q_KEY,JSON.stringify(q));}catch(e){console.error("Queue save failed:",e);}}
+var pendingQueue=qLoad();
+function updateSyncIndicator(){
+  if(pendingQueue.length>0){syncBadge(pendingQueue.length+" change"+(pendingQueue.length===1?"":"s")+" pending",false);}
+  else{syncBadge("Synced",true);}
+}
+function queueWrite(table,op,data){
+  pendingQueue.push({qid:uid(),table:table,op:op,data:data,ts:Date.now()});
+  qSave(pendingQueue);
+  updateSyncIndicator();
+}
+async function flushQueue(){
+  if(!pendingQueue.length)return;
+  var q=pendingQueue.slice();
+  for(var i=0;i<q.length;i++){
+    var item=q[i];
+    try{
+      if(item.op==="upsert"){await sbUp(item.table,item.data);}
+      else{await sbDel(item.table,item.data);}
+      pendingQueue=pendingQueue.filter(function(x){return x.qid!==item.qid});
+      qSave(pendingQueue);
+    }catch(e){console.error("Flush stopped:",e);break;}
+  }
+  updateSyncIndicator();
+}
+async function qUp(table,row){
+  try{
+    await sbUp(table,row);
+    if(pendingQueue.length){flushQueue();}else{syncBadge("Synced",true);}
+    return true;
+  }catch(e){console.error(e);queueWrite(table,"upsert",row);return false;}
+}
+async function qDel(table,id){
+  try{
+    await sbDel(table,id);
+    if(pendingQueue.length){flushQueue();}else{syncBadge("Synced",true);}
+    return true;
+  }catch(e){console.error(e);queueWrite(table,"delete",id);return false;}
+}
+function persistLocal(){
+  ls("fir:e",ests);ls("fir:i",invs);ls("fir:c",clients);ls("fir:x",exps);ls("fir:l",leads);ls("fir:s",S);
+}
+window.addEventListener("online",function(){flushQueue();});
+setInterval(function(){if(pendingQueue.length)flushQueue();},30000);
+
 var S={biz:"FixItRick Handyman",phone:"614-966-2311",email:"rickh@fixitrick.com",web:"fixitrick.com",apiKey:"",rate:100,markup:20,tax:0,terms:"Payment due within 30 days. Checks payable to Rick H.\nVenmo/Zelle: 614-966-2311",valid:30,due:30,nextEst:1};
 function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}else{localStorage.setItem(k,JSON.stringify(v))}}
 // Row mappers
@@ -271,12 +319,19 @@ async function load(){
     var sd=await rs.json();
     if(sd&&sd[0]&&sd[0].data){S=Object.assign(S,sd[0].data);}
     S.apiKey=ak||"";
-    syncBadge("Synced",true);
+    pendingQueue=qLoad();
+    if(pendingQueue.length){await flushQueue();}else{syncBadge("Synced",true);}
   }catch(err){
     console.error("Load error:",err);
-    syncBadge("Offline",false);
     var s=ls("fir:s");if(s)S=Object.assign(S,s);
+    var le=ls("fir:e");if(le)ests=le;
+    var li=ls("fir:i");if(li)invs=li;
+    var lc=ls("fir:c");if(lc)clients=lc;
+    var lx=ls("fir:x");if(lx)exps=lx;
+    var ll=ls("fir:l");if(ll)leads=ll;
     S.apiKey=ak||"";
+    pendingQueue=qLoad();
+    updateSyncIndicator();
   }
   document.getElementById("hbiz").textContent=S.biz;
   document.getElementById("hcon").textContent=S.phone+" · "+S.email;
@@ -325,13 +380,13 @@ function renderDB(){
   document.getElementById("dact").innerHTML=recent.length?recent.map(function(r){return"<div class=\"li\"><div><div class=\"lin\">"+r.text+"</div><div class=\"lim\">"+r.sub+" · "+new Date(r.date).toLocaleDateString()+"</div></div><span class=\"badge "+r.status+"\">"+r.status+"</span></div>"}).join(""):"<div class=\"es\">No activity yet</div>";
 }
 function renderEL(){var q=(document.getElementById("est-search")||{}).value||"";var list=[].concat(ests).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(e){return(e.customer||"").toLowerCase().includes(ql)||(e.estNum||"").toLowerCase().includes(ql);})}document.getElementById("elist").innerHTML=list.length?list.map(function(e){return'<div class="li"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+esc(e.estNum||"")+(e.customer?" - "+esc(e.customer):"")+"</div><div class=\"lim\">"+fmt(e.total)+" · "+new Date(e.created).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+e.status+"\">"+e.status+'</span><button class="db2" style="color:#dc3545;font-size:15px" onclick="event.stopPropagation();delEst(\''+e.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No estimates yet</div>';var older=document.getElementById("est-older");if(older)older.style.display=estAllLoaded?"none":"block";}
-async function delEst(id){if(!confirm("Delete this estimate? This can't be undone."))return;try{await sbDel("fir_estimates",id);ests=ests.filter(function(e){return e.id!==id});syncBadge("Synced",true);toast("Estimate deleted");renderEL();}catch(e){console.error(e);toast("Delete failed — try again");}}
+async function delEst(id){if(!confirm("Delete this estimate? This can't be undone."))return;ests=ests.filter(function(e){return e.id!==id});renderEL();toast("Estimate deleted");var ok=await qDel("fir_estimates",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderIL(){var q=(document.getElementById("inv-search")||{}).value||"";var list=[].concat(invs).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(i){return(i.customer||"").toLowerCase().includes(ql)||(i.invNum||"").toLowerCase().includes(ql);})}document.getElementById("ilist").innerHTML=list.length?list.map(function(i){return'<div class="li"><div style="flex:1"><div class="lin">'+esc(i.invNum||"")+" - "+esc(i.customer||"")+"</div><div class=\"lim\">"+fmt(i.total)+" · Due "+new Date(i.dueDate).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+(i.paid?"paid":"unpaid")+"\">"+( i.paid?"paid":"unpaid")+"</span>"+(!i.paid?'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="markPaid(\''+i.id+'\')" >Mark Paid</button>':"")+'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="printInv(\''+i.id+'\')" >Print</button>'+(i.emailedAt?'<span class="badge sent" style="font-size:10px" title="Emailed '+new Date(i.emailedAt).toLocaleDateString()+' to '+i.emailedTo+'">\u2709\ufe0f sent</span>':'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="emailInv(\''+i.id+'\')" >Email</button>')+'<button class="db2" style="color:#dc3545;font-size:15px" onclick="delInv(\''+i.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No invoices yet</div>';var older=document.getElementById("inv-older");if(older)older.style.display=invAllLoaded?"none":"block";}
-async function delInv(id){if(!confirm("Delete this invoice? This can't be undone."))return;try{await sbDel("fir_invoices",id);invs=invs.filter(function(i){return i.id!==id});syncBadge("Synced",true);toast("Invoice deleted");renderIL();renderDB();}catch(e){console.error(e);toast("Delete failed — try again");}}
+async function delInv(id){if(!confirm("Delete this invoice? This can't be undone."))return;invs=invs.filter(function(i){return i.id!==id});renderIL();renderDB();toast("Invoice deleted");var ok=await qDel("fir_invoices",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";var list=clients;if(q){var ql=q.toLowerCase();list=list.filter(function(c){return(c.name||"").toLowerCase().includes(ql)||(c.phone||"").toLowerCase().includes(ql);})}document.getElementById("clist").innerHTML=list.length?list.map(function(c){return'<div class="li"><div><div class="lin">'+esc(c.name)+"</div><div class=\"lim\">"+esc(c.phone||"")+" "+esc(c.email||"")+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"estFromClient('"+c.id+"')\" >+ Est</button><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"delClient('"+c.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No clients</div>'}
-async function delClient(id){if(!confirm("Delete this client? This can't be undone."))return;try{await sbDel("fir_clients",id);clients=clients.filter(function(c){return c.id!==id});syncBadge("Synced",true);toast("Client deleted");renderCL();}catch(e){console.error(e);toast("Delete failed — try again");}}
+async function delClient(id){if(!confirm("Delete this client? This can't be undone."))return;clients=clients.filter(function(c){return c.id!==id});renderCL();toast("Client deleted");var ok=await qDel("fir_clients",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>"}
-async function delExp(id){if(!confirm("Delete this expense? This can't be undone."))return;try{await sbDel("fir_expenses",id);exps=exps.filter(function(e){return e.id!==id});syncBadge("Synced",true);toast("Expense deleted");renderXL();}catch(e){console.error(e);toast("Delete failed — try again");}}
+async function delExp(id){if(!confirm("Delete this expense? This can't be undone."))return;exps=exps.filter(function(e){return e.id!==id});renderXL();toast("Expense deleted");var ok=await qDel("fir_expenses",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sak").value=S.apiKey||"";document.getElementById("sr").value=S.rate||100;document.getElementById("sm").value=S.markup||20;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=S.valid||30;document.getElementById("sid").value=S.due||30;document.getElementById("sne").value=S.nextEst||1}
 async function saveSettings(){
   S.biz=document.getElementById("sb").value||"FixItRick";
@@ -350,28 +405,11 @@ async function saveSettings(){
   S.nextEst=+document.getElementById("sne").value||1;
   var toCloud=Object.assign({},S);
   delete toCloud.apiKey;
-  try {
-    var r=await fetch(SURL+"/rest/v1/fir_settings",{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify({id:"main",data:toCloud})});
-    if(r.ok){
-      document.getElementById("hbiz").textContent=S.biz;
-      document.getElementById("hcon").textContent=S.phone+" · "+S.email;
-      syncBadge("Synced",true);
-      toast("Settings saved and synced!");
-    } else {
-      var err=await r.text();
-      console.error("Settings save error:",err);
-      ls("fir:s",S);
-      document.getElementById("hbiz").textContent=S.biz;
-      document.getElementById("hcon").textContent=S.phone+" · "+S.email;
-      toast("Saved locally (sync error)");
-    }
-  } catch(e) {
-    console.error("Settings save exception:",e);
-    ls("fir:s",S);
-    document.getElementById("hbiz").textContent=S.biz;
-    document.getElementById("hcon").textContent=S.phone+" · "+S.email;
-    toast("Saved locally (offline)");
-  }
+  document.getElementById("hbiz").textContent=S.biz;
+  document.getElementById("hcon").textContent=S.phone+" · "+S.email;
+  var ok=await qUp("fir_settings",{id:"main",data:toCloud});
+  persistLocal();
+  toast(ok?"Settings saved and synced!":"Saved locally — will sync when back online");
 }
 function openEF(id){mats=[];labs=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display=S.apiKey?"none":"block";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}addML();addLL();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=e.markupPct||S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));if(!mats.length)addML();if(!labs.length)addLL();updBtns(e.status);
     // Show scheduled date if set
@@ -407,10 +445,10 @@ function calcT(){
   return{mt:mt,lt:lt,mka:mka,txa:txa,dc:dc,dep:dep,tot:tot,bal:bal};
 }
 function getFormData(){var t=calcT(),isNew=!document.getElementById("feid").value;var num=document.getElementById("festnum").value;if(!num&&isNew)num=fmtN(S.nextEst);return{id:document.getElementById("feid").value||uid(),estNum:num,customer:document.getElementById("fcn").value,phone:document.getElementById("fcp").value,email:document.getElementById("fce").value,address:document.getElementById("fca").value,cat:document.getElementById("fjc").value,desc:document.getElementById("fjd").value,notes:document.getElementById("fnotes").value,markupPct:+(document.getElementById("fmk").value)||0,taxPct:+(document.getElementById("ftx").value)||0,discount:t.dc,deposit:t.dep,total:t.tot,balance:t.bal,status:document.getElementById("fstat").value||"draft",mats:JSON.parse(JSON.stringify(mats)),labs:JSON.parse(JSON.stringify(labs)),created:Date.now()}}
-async function saveEst(){var d=getFormData(),isNew=!document.getElementById("feid").value;if(isNew){d.estNum=fmtN(S.nextEst);S.nextEst++;}var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);if(d.customer){var cExists=false;for(var i=0;i<clients.length;i++){if(clients[i].name===d.customer&&clients[i].phone===d.phone){cExists=true;break;}}if(!cExists){var nc={id:uid(),name:d.customer,phone:d.phone||"",email:d.email||"",address:d.address||"",created:Date.now()};clients.push(nc);try{await sbUp("fir_clients",c2db(nc));}catch(e){console.error(e);}renderCL();}}try{await sbUp("fir_estimates",e2db(d));var toCloud=Object.assign({},S);delete toCloud.apiKey;await sbUp("fir_settings",{id:"main",data:toCloud});syncBadge("Synced",true);}catch(e){ls("fir:e",ests);ls("fir:s",S);}document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
-async function markStat(stat){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}for(var i=0;i<ests.length;i++){if(ests[i].id===id){ests[i].status=stat;try{await sbUp("fir_estimates",e2db(ests[i]));}catch(e){}break;}}document.getElementById("fstat").value=stat;updBtns(stat);toast("Status: "+stat);}
-async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(invs.length+1);var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";try{await Promise.all([sbUp("fir_invoices",i2db(inv)),sbUp("fir_estimates",e2db(e))]);syncBadge("Synced",true);}catch(err){}toast("Invoice "+num+" created!");sv("inv");}
-async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;try{await sbUp("fir_invoices",i2db(invs[i]));}catch(e){}break;}}renderIL();toast("Marked paid!");}
+async function saveEst(){var d=getFormData(),isNew=!document.getElementById("feid").value;if(isNew){d.estNum=fmtN(S.nextEst);S.nextEst++;}var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);if(d.customer){var cExists=false;for(var i=0;i<clients.length;i++){if(clients[i].name===d.customer&&clients[i].phone===d.phone){cExists=true;break;}}if(!cExists){var nc={id:uid(),name:d.customer,phone:d.phone||"",email:d.email||"",address:d.address||"",created:Date.now()};clients.push(nc);await qUp("fir_clients",c2db(nc));renderCL();}}await qUp("fir_estimates",e2db(d));var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
+async function markStat(stat){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}for(var i=0;i<ests.length;i++){if(ests[i].id===id){ests[i].status=stat;await qUp("fir_estimates",e2db(ests[i]));break;}}persistLocal();document.getElementById("fstat").value=stat;updBtns(stat);toast("Status: "+stat);}
+async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(invs.length+1);var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));persistLocal();toast("Invoice "+num+" created!");sv("inv");}
+async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
 
 function toggleLF(){var f=document.getElementById("lform");f.style.display=f.style.display==="none"?"block":"none"}
 async function saveLead(){
@@ -418,13 +456,15 @@ async function saveLead(){
   if(!name){toast("Name required");return}
   var nl={id:uid(),name:name,phone:document.getElementById("llp").value,email:document.getElementById("lle").value,source:document.getElementById("lls").value,jobDesc:document.getElementById("llj").value,status:"new",created:Date.now()};
   leads.push(nl);
-  try{await sbUp("fir_leads",l2db(nl));syncBadge("Synced",true);}catch(e){console.error(e);}
+  await qUp("fir_leads",l2db(nl));
+  persistLocal();
   ["lln","llp","lle","llj"].forEach(function(x){document.getElementById(x).value=""});
   document.getElementById("lform").style.display="none";
   renderLL();toast("Lead saved!");
 }
 async function updateLeadStatus(id,stat){
-  for(var i=0;i<leads.length;i++){if(leads[i].id===id){leads[i].status=stat;try{await sbUp("fir_leads",l2db(leads[i]));}catch(e){}break;}}
+  for(var i=0;i<leads.length;i++){if(leads[i].id===id){leads[i].status=stat;await qUp("fir_leads",l2db(leads[i]));break;}}
+  persistLocal();
   renderLL();toast("Status updated");
 }
 function convertLead(id){
@@ -455,7 +495,7 @@ function renderLL(){
   }).join(""):q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>';
   var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
 }
-async function delLead(id){if(!confirm("Delete this lead? This can't be undone."))return;try{await sbDel("fir_leads",id);leads=leads.filter(function(l){return l.id!==id});syncBadge("Synced",true);toast("Lead deleted");renderLL();}catch(e){console.error(e);toast("Delete failed — try again");}}
+async function delLead(id){if(!confirm("Delete this lead? This can't be undone."))return;leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 
 
 async function clearAllData(){
@@ -495,9 +535,9 @@ async function loadOlder(tab){
 }
 function toggleCF(){var f=document.getElementById("cform");f.style.display=f.style.display==="none"?"block":"none"}
 function toggleEF(){var f=document.getElementById("eform");f.style.display=f.style.display==="none"?"block":"none";if(f.style.display==="block")document.getElementById("exd").value=new Date().toISOString().split("T")[0]}
-async function saveClient(){var name=document.getElementById("cln").value.trim();if(!name){toast("Name required");return}var nc={id:uid(),name:name,phone:document.getElementById("clp").value,email:document.getElementById("cle").value,address:document.getElementById("cla").value,created:Date.now()};clients.push(nc);try{await sbUp("fir_clients",c2db(nc));syncBadge("Synced",true);}catch(e){}["cln","clp","cle","cla"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("cform").style.display="none";renderCL();toast("Client saved!")}
+async function saveClient(){var name=document.getElementById("cln").value.trim();if(!name){toast("Name required");return}var nc={id:uid(),name:name,phone:document.getElementById("clp").value,email:document.getElementById("cle").value,address:document.getElementById("cla").value,created:Date.now()};clients.push(nc);await qUp("fir_clients",c2db(nc));persistLocal();["cln","clp","cle","cla"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("cform").style.display="none";renderCL();toast("Client saved!")}
 function estFromClient(id){var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}if(!c)return;openEF(null);document.getElementById("fcn").value=c.name||"";document.getElementById("fcp").value=c.phone||"";document.getElementById("fce").value=c.email||"";document.getElementById("fca").value=c.address||""}
-async function saveExp(){var amt=+(document.getElementById("exa").value);if(!amt){toast("Amount required");return}var nx={id:uid(),date:document.getElementById("exd").value,amount:amt,cat:document.getElementById("exc").value,desc:document.getElementById("exn").value,created:Date.now()};exps.push(nx);try{await sbUp("fir_expenses",x2db(nx));syncBadge("Synced",true);}catch(e){}document.getElementById("exa").value="";document.getElementById("exn").value="";document.getElementById("eform").style.display="none";renderXL();toast("Logged!")}
+async function saveExp(){var amt=+(document.getElementById("exa").value);if(!amt){toast("Amount required");return}var nx={id:uid(),date:document.getElementById("exd").value,amount:amt,cat:document.getElementById("exc").value,desc:document.getElementById("exn").value,created:Date.now()};exps.push(nx);await qUp("fir_expenses",x2db(nx));persistLocal();document.getElementById("exa").value="";document.getElementById("exn").value="";document.getElementById("eform").style.display="none";renderXL();toast("Logged!")}
 function buildPrint(d,type,docNum,footer){
   var LOGO="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";
   var rows=[];
@@ -709,7 +749,8 @@ async function confirmSched(){
     if(ests[i].id===id){
       ests[i].status="scheduled";
       ests[i].schedDate=schedTs;
-      try{await sbUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs}));syncBadge("Synced",true);}catch(e){}
+      await qUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs}));
+      persistLocal();
       try{
         var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+SKEY,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
         var zj=await zr.json();
