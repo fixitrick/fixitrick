@@ -434,8 +434,9 @@ function updBtns(s){
   comp.style.display=s==="in_progress"?"":"none";
   inv.style.display=(s==="approved"||s==="scheduled"||s==="in_progress"||s==="complete")?"":"none";
 }
-function renderPhotos(){document.getElementById("photostrip").innerHTML=photos.map(function(p,i){return"<div style=\"position:relative\"><img src=\""+p.url+"\" style=\"width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd\" onclick=\"window.open('"+p.url+"','_blank')\"><button class=\"db2\" style=\"position:absolute;top:-6px;right:-6px;width:18px;height:18px;padding:0;font-size:10px;line-height:1\" onclick=\"delPhoto("+i+")\">x</button></div>"}).join("")}
-function delPhoto(i){photos.splice(i,1);renderPhotos()}
+function renderPhotos(){document.getElementById("photostrip").innerHTML=photos.map(function(p,i){return"<div style=\"position:relative\"><img src=\""+p.url+"\" style=\"width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd\" onclick=\"window.open('"+p.url+"','_blank')\"><button style=\"position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;font-size:13px;line-height:1;border:none;border-radius:50%;background:#dc3545;color:#fff;cursor:pointer\" onclick=\"delPhoto("+i+")\">x</button></div>"}).join("")}
+function photoPathFromUrl(url){var marker="/storage/v1/object/public/fir-photos/";var idx=url.indexOf(marker);return idx>=0?url.slice(idx+marker.length):null}
+async function delPhoto(i){var ph=photos[i];photos.splice(i,1);renderPhotos();if(ph&&ph.url){var path=photoPathFromUrl(ph.url);if(path){try{await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"application/json"},body:JSON.stringify({prefixes:[path]})})}catch(e){console.error(e)}}}}
 async function handlePhoto(evt){var file=evt.target.files[0];if(!file)return;evt.target.value="";var img=new Image();img.src=URL.createObjectURL(file);await new Promise(function(r){img.onload=r});var canvas=document.createElement("canvas");var scale=Math.min(1,1200/img.width);canvas.width=img.width*scale;canvas.height=img.height*scale;canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);var blob=await new Promise(function(r){canvas.toBlob(r,"image/jpeg",0.8)});var eid=document.getElementById("feid").value;if(!eid){eid=uid();document.getElementById("feid").value=eid}var path=eid+"/"+uid()+".jpg";try{var up=await fetch(SURL+"/storage/v1/object/fir-photos/"+path,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"image/jpeg"},body:blob});if(!up.ok){toast("Photo upload failed");return}var url=SURL+"/storage/v1/object/public/fir-photos/"+path;photos.push({url:url,tag:"general",addedAt:Date.now()});renderPhotos();toast("Photo added")}catch(e){toast("Photo upload failed");console.error(e)}}
 function addML(){mats.push({id:uid(),name:"",qty:1,unit:0});renderMats();calcT()}
 function addLL(){labs.push({id:uid(),name:"",hrs:1,rate:S.rate});renderLabs();calcT()}
@@ -507,13 +508,25 @@ async function delLead(id){if(!confirm("Delete this lead? This can't be undone."
 
 
 async function clearAllData(){
-  if(!confirm("Are you sure? This will permanently delete all estimates, invoices, clients, leads, and expenses. This cannot be undone.")) return;
+  if(!confirm("Are you sure? This will permanently delete all estimates, invoices, clients, leads, expenses, and any job photos. This cannot be undone.")) return;
   if(!confirm("Last chance — delete everything?")) return;
   try{
     var h={"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"application/json"};
+    var idsRes=await fetch(SURL+"/rest/v1/fir_estimates?select=id",{headers:h});
+    var idRows=await idsRes.json();
     var tables=["fir_estimates","fir_invoices","fir_clients","fir_leads","fir_expenses"];
     await Promise.all(tables.map(function(t){
       return fetch(SURL+"/rest/v1/"+t+"?id=neq.00000000",{method:"DELETE",headers:h});
+    }));
+    await Promise.all((idRows||[]).map(async function(row){
+      try{
+        var listRes=await fetch(SURL+"/storage/v1/object/list/fir-photos",{method:"POST",headers:h,body:JSON.stringify({prefix:row.id+"/"})});
+        var files=await listRes.json();
+        if(Array.isArray(files)&&files.length){
+          var paths=files.map(function(f){return row.id+"/"+f.name});
+          await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:h,body:JSON.stringify({prefixes:paths})});
+        }
+      }catch(e){console.error(e)}
     }));
     ests=[];invs=[];clients=[];exps=[];leads=[];
     estAllLoaded=false;invAllLoaded=false;leadAllLoaded=false;
