@@ -76,14 +76,36 @@ textarea{resize:vertical;min-height:64px}
 .owed-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f5f5f5;gap:8px}
 .owed-row:last-child{border-bottom:none}
 .overdue-tag{font-size:10px;font-weight:700;color:#721c24;background:#f8d7da;padding:2px 6px;border-radius:99px}
+
+#login-overlay{position:fixed;inset:0;background:var(--g);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}
+#login-box{background:var(--card);border-radius:14px;padding:2rem 1.6rem;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,0.25)}
+#login-box h1{font-size:16px;font-weight:800;letter-spacing:1px;color:var(--g);margin-bottom:2px}
+#login-box .sub{font-size:12px;color:var(--faint);margin-bottom:1.2rem}
+#login-error{display:none;background:#f8d7da;color:#721c24;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-bottom:10px}
+#login-btn{width:100%;margin-top:6px}
+.logout-link{background:none;border:none;color:var(--au);font-size:11px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline}
 </style>
 </head>
 <body>
+
+<div id="login-overlay">
+  <div id="login-box">
+    <h1>FIXITRICK ADMIN</h1>
+    <div class="sub">Sign in to continue</div>
+    <div id="login-error"></div>
+    <label for="login-email">Email</label>
+    <input id="login-email" type="email" autocomplete="username" placeholder="rickh@fixitrick.com" style="margin-bottom:10px">
+    <label for="login-pw">Password</label>
+    <input id="login-pw" type="password" autocomplete="current-password" placeholder="••••••••">
+    <button id="login-btn" class="bp" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
 <div id="app">
 <div id="toast"></div>
 <div class="hdr">
   <img src="data:image/png;base64,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" alt="Fix It Rick" style="height:52px;width:auto">
-  <div class="hdr-r"><div style="font-size:10px;text-align:right;margin-bottom:2px" id="synclbl">...</div><div class="hdr-biz" id="hbiz">FixItRick Handyman</div><div class="hdr-c" id="hcon">614-966-2311 · rickh@fixitrick.com</div></div>
+  <div class="hdr-r"><div style="font-size:10px;text-align:right;margin-bottom:2px" id="synclbl">...</div><div class="hdr-biz" id="hbiz">FixItRick Handyman</div><div class="hdr-c" id="hcon">614-966-2311 · rickh@fixitrick.com</div><div style="margin-top:3px"><button class="logout-link" onclick="logout()">Sign out</button></div></div>
 </div>
 <nav class="nav">
   <button class="nb on" onclick="sv('db')">Dashboard</button>
@@ -224,15 +246,114 @@ textarea{resize:vertical;min-height:64px}
 <script>
 var SURL="https://dzfxbxgzvgnqbkmhvprj.supabase.co";
 var SKEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6ZnhieGd6dmducWJrbWh2cHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDg2NTMsImV4cCI6MjA5NDQyNDY1M30.CzcS7AO9kGzHG-N_beqNk7wsFpcHhTdpdlyjEbni01s";
+
+// --- Auth: gates the whole app behind a logged-in Supabase user ---
+var ATOKEN=null;
+var _refreshTimer=null;
+
+function showLogin(errMsg){
+  document.getElementById("login-overlay").style.display="flex";
+  document.getElementById("app").style.display="none";
+  var e=document.getElementById("login-error");
+  if(errMsg){e.textContent=errMsg;e.style.display="block";}else{e.style.display="none";}
+}
+function hideLogin(){
+  document.getElementById("login-overlay").style.display="none";
+  document.getElementById("app").style.display="block";
+}
+
+async function doLogin(){
+  var email=document.getElementById("login-email").value.trim();
+  var pw=document.getElementById("login-pw").value;
+  var btn=document.getElementById("login-btn");
+  if(!email||!pw){showLogin("Enter your email and password.");return;}
+  btn.disabled=true;btn.textContent="Signing in...";
+  try{
+    var r=await fetch(SURL+"/auth/v1/token?grant_type=password",{
+      method:"POST",
+      headers:{"apikey":SKEY,"Content-Type":"application/json"},
+      body:JSON.stringify({email:email,password:pw})
+    });
+    var data=await r.json();
+    if(!r.ok||!data.access_token){
+      showLogin(data.error_description||data.msg||"Invalid email or password.");
+      btn.disabled=false;btn.textContent="Sign In";
+      return;
+    }
+    ATOKEN=data.access_token;
+    localStorage.setItem("fir:refresh_token",data.refresh_token);
+    hideLogin();
+    startTokenRefreshTimer();
+    load();
+  }catch(e){
+    showLogin("Connection error. Please try again.");
+    btn.disabled=false;btn.textContent="Sign In";
+  }
+}
+
+async function tryResumeSession(){
+  var rt=localStorage.getItem("fir:refresh_token");
+  if(!rt){showLogin();return;}
+  try{
+    var r=await fetch(SURL+"/auth/v1/token?grant_type=refresh_token",{
+      method:"POST",
+      headers:{"apikey":SKEY,"Content-Type":"application/json"},
+      body:JSON.stringify({refresh_token:rt})
+    });
+    var data=await r.json();
+    if(!r.ok||!data.access_token){
+      localStorage.removeItem("fir:refresh_token");
+      showLogin();
+      return;
+    }
+    ATOKEN=data.access_token;
+    localStorage.setItem("fir:refresh_token",data.refresh_token);
+    hideLogin();
+    startTokenRefreshTimer();
+    load();
+  }catch(e){
+    showLogin();
+  }
+}
+
+function startTokenRefreshTimer(){
+  if(_refreshTimer)clearInterval(_refreshTimer);
+  _refreshTimer=setInterval(async function(){
+    var rt=localStorage.getItem("fir:refresh_token");
+    if(!rt)return;
+    try{
+      var r=await fetch(SURL+"/auth/v1/token?grant_type=refresh_token",{
+        method:"POST",
+        headers:{"apikey":SKEY,"Content-Type":"application/json"},
+        body:JSON.stringify({refresh_token:rt})
+      });
+      var data=await r.json();
+      if(r.ok&&data.access_token){
+        ATOKEN=data.access_token;
+        localStorage.setItem("fir:refresh_token",data.refresh_token);
+      }
+    }catch(e){}
+  },45*60*1000);
+}
+
+function logout(){
+  localStorage.removeItem("fir:refresh_token");
+  ATOKEN=null;
+  if(_refreshTimer)clearInterval(_refreshTimer);
+  location.reload();
+}
+
+document.getElementById("login-pw").addEventListener("keydown",function(ev){if(ev.key==="Enter")doLogin();});
+document.getElementById("app").style.display="none";
 var EMAIL_FN_URL = SURL + "/functions/v1/send-document";
 var ests=[],invs=[],clients=[],exps=[],leads=[],mats=[],labs=[],photos=[],pendingPhotoDeletes=[];
 var estAllLoaded=false,invAllLoaded=false,leadAllLoaded=false;
 var _synced=false;
 
 // Supabase helpers
-async function sbQ(table,extra){extra=extra||"";var r=await fetch(SURL+"/rest/v1/"+table+"?select=*"+extra,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});if(!r.ok)throw new Error(table+" fetch failed");return r.json();}
-async function sbUp(table,row){var r=await fetch(SURL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());}
-async function sbDel(table,id){var r=await fetch(SURL+"/rest/v1/"+table+"?id=eq."+id,{method:"DELETE",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});if(!r.ok)throw new Error(await r.text());}
+async function sbQ(table,extra){extra=extra||"";var r=await fetch(SURL+"/rest/v1/"+table+"?select=*"+extra,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});if(!r.ok)throw new Error(table+" fetch failed");return r.json();}
+async function sbUp(table,row){var r=await fetch(SURL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());}
+async function sbDel(table,id){var r=await fetch(SURL+"/rest/v1/"+table+"?id=eq."+id,{method:"DELETE",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});if(!r.ok)throw new Error(await r.text());}
 
 function syncBadge(msg,ok){var el=document.getElementById("synclbl");if(el){el.textContent=msg;el.style.color=ok===true?"#155724":ok===false?"#721c24":"#999";}}
 
@@ -310,12 +431,12 @@ async function load(){
   syncBadge("Syncing...",null);
   try{
     var cutoff=Date.now()-90*24*60*60*1000;
-    var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
-    var rs=await fetch(SURL+"/rest/v1/fir_settings?id=eq.main",{headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY}});
+    var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var rs=await fetch(SURL+"/rest/v1/fir_settings?id=eq.main",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     ests=(await re.json()).map(db2e);
     invs=(await ri.json()).map(db2i);
     clients=(await rc.json()).map(db2c);
@@ -437,8 +558,8 @@ function updBtns(s){
 function renderPhotos(){document.getElementById("photostrip").innerHTML=photos.map(function(p,i){return"<div style=\"position:relative\"><img src=\""+p.url+"\" style=\"width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd\" onclick=\"window.open('"+p.url+"','_blank')\"><button style=\"position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;font-size:13px;line-height:1;border:none;border-radius:50%;background:#dc3545;color:#fff;cursor:pointer\" onclick=\"delPhoto("+i+")\">x</button></div>"}).join("")}
 function photoPathFromUrl(url){var marker="/storage/v1/object/public/fir-photos/";var idx=url.indexOf(marker);return idx>=0?url.slice(idx+marker.length):null}
 function delPhoto(i){if(!confirm("Delete this photo? This can't be undone once saved."))return;var ph=photos[i];photos.splice(i,1);if(ph&&ph.url){var path=photoPathFromUrl(ph.url);if(path)pendingPhotoDeletes.push(path)}renderPhotos()}
-async function flushPendingPhotoDeletes(){if(!pendingPhotoDeletes.length)return;var paths=pendingPhotoDeletes.slice();pendingPhotoDeletes=[];try{await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"application/json"},body:JSON.stringify({prefixes:paths})})}catch(e){console.error(e)}}
-async function handlePhoto(evt){var file=evt.target.files[0];if(!file)return;evt.target.value="";var img=new Image();img.src=URL.createObjectURL(file);await new Promise(function(r){img.onload=r});var canvas=document.createElement("canvas");var scale=Math.min(1,1200/img.width);canvas.width=img.width*scale;canvas.height=img.height*scale;canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);var blob=await new Promise(function(r){canvas.toBlob(r,"image/jpeg",0.8)});var eid=document.getElementById("feid").value;if(!eid){eid=uid();document.getElementById("feid").value=eid}var path=eid+"/"+uid()+".jpg";try{var up=await fetch(SURL+"/storage/v1/object/fir-photos/"+path,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"image/jpeg"},body:blob});if(!up.ok){toast("Photo upload failed");return}var url=SURL+"/storage/v1/object/public/fir-photos/"+path;photos.push({url:url,tag:"general",addedAt:Date.now()});renderPhotos();toast("Photo added")}catch(e){toast("Photo upload failed");console.error(e)}}
+async function flushPendingPhotoDeletes(){if(!pendingPhotoDeletes.length)return;var paths=pendingPhotoDeletes.slice();pendingPhotoDeletes=[];try{await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"},body:JSON.stringify({prefixes:paths})})}catch(e){console.error(e)}}
+async function handlePhoto(evt){var file=evt.target.files[0];if(!file)return;evt.target.value="";var img=new Image();img.src=URL.createObjectURL(file);await new Promise(function(r){img.onload=r});var canvas=document.createElement("canvas");var scale=Math.min(1,1200/img.width);canvas.width=img.width*scale;canvas.height=img.height*scale;canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);var blob=await new Promise(function(r){canvas.toBlob(r,"image/jpeg",0.8)});var eid=document.getElementById("feid").value;if(!eid){eid=uid();document.getElementById("feid").value=eid}var path=eid+"/"+uid()+".jpg";try{var up=await fetch(SURL+"/storage/v1/object/fir-photos/"+path,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"image/jpeg"},body:blob});if(!up.ok){toast("Photo upload failed");return}var url=SURL+"/storage/v1/object/public/fir-photos/"+path;photos.push({url:url,tag:"general",addedAt:Date.now()});renderPhotos();toast("Photo added")}catch(e){toast("Photo upload failed");console.error(e)}}
 function addML(){mats.push({id:uid(),name:"",qty:1,unit:0});renderMats();calcT()}
 function addLL(){labs.push({id:uid(),name:"",hrs:1,rate:S.rate});renderLabs();calcT()}
 function renderMats(){document.getElementById("fmat").innerHTML=mats.map(function(m,i){return"<div class=\"lir\"><input placeholder=\"Material\" value=\""+( m.name||"")+"\" oninput=\"mats["+i+"].name=this.value\"><input type=\"number\" min=\"0\" value=\""+( m.qty||1)+"\" style=\"text-align:center\" oninput=\"mats["+i+"].qty=+this.value;calcT()\"><input type=\"number\" min=\"0\" step=\"0.01\" value=\""+( m.unit||0)+"\" style=\"text-align:right\" oninput=\"mats["+i+"].unit=+this.value;calcT()\"><input type=\"number\" readonly value=\""+( ((m.qty||1)*(m.unit||0)).toFixed(2))+"\" style=\"text-align:right;background:var(--bg);color:var(--g)\"><button class=\"db2\" onclick=\"mats.splice("+i+",1);renderMats();calcT()\">x</button></div>"}).join("")}
@@ -512,7 +633,7 @@ async function clearAllData(){
   if(!confirm("Are you sure? This will permanently delete all estimates, invoices, clients, leads, expenses, and any job photos. This cannot be undone.")) return;
   if(!confirm("Last chance — delete everything?")) return;
   try{
-    var h={"apikey":SKEY,"Authorization":"Bearer "+SKEY,"Content-Type":"application/json"};
+    var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"};
     var idsRes=await fetch(SURL+"/rest/v1/fir_estimates?select=id",{headers:h});
     var idRows=await idsRes.json();
     var tables=["fir_estimates","fir_invoices","fir_clients","fir_leads","fir_expenses"];
@@ -541,7 +662,7 @@ async function clearAllData(){
 async function loadOlder(tab){
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Loading...";}
   try{
-    var h={"apikey":SKEY,"Authorization":"Bearer "+SKEY};
+    var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
     if(tab==="est"){
       var r=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc",{headers:h});
       ests=(await r.json()).map(db2e);estAllLoaded=true;renderEL();
@@ -676,7 +797,7 @@ async function emailEst(){
   var btn=document.getElementById("btn-email");
   btn.disabled=true;btn.textContent="Sending...";
   try{
-    var r=await fetch(EMAIL_FN_URL,{method:"POST",headers:{"Authorization":"Bearer "+SKEY,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({docType:"estimate",id:id})});
+    var r=await fetch(EMAIL_FN_URL,{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({docType:"estimate",id:id})});
     var j=await r.json();
     if(j.ok){
       e.emailedAt=j.emailedAt;e.emailedTo=j.emailedTo;
@@ -699,7 +820,7 @@ async function emailInv(id){
   if(!inv)return;
   if(!inv.email){toast("No email on file for this customer");return}
   try{
-    var r=await fetch(EMAIL_FN_URL,{method:"POST",headers:{"Authorization":"Bearer "+SKEY,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({docType:"invoice",id:id})});
+    var r=await fetch(EMAIL_FN_URL,{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({docType:"invoice",id:id})});
     var j=await r.json();
     if(j.ok){inv.emailedAt=j.emailedAt;inv.emailedTo=j.emailedTo;toast("Emailed to "+j.emailedTo);renderIL();}
     else if(j.reason==="no_email"){toast("No email on file for this customer");}
@@ -708,7 +829,7 @@ async function emailInv(id){
 }
 async function runAI(){if(!S.apiKey){toast("Add API key in Settings");return}var desc=document.getElementById("fjd").value,cat=document.getElementById("fjc").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Estimating...";try{var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,messages:[{role:"user",content:photos.map(function(p){return{type:"image",source:{type:"url",url:p.url}}}).concat([{type:"text",text:"You are an experienced handyman estimator in Columbus, Ohio. Job: \""+( cat?cat+": ":"")+desc+"\". "+(photos.length?"Photos of the job are attached above — use them to inform materials and scope.":"")+"\n\nEstimate using current Columbus OH retail prices (Home Depot/Menards). Every material MUST have a realistic non-zero unit price.\n\nReturn ONLY valid JSON:\n{\"materials\":[{\"name\":\"specific item name with size/type\",\"qty\":1,\"unit\":12.99}],\"labor\":[{\"name\":\"task\",\"hrs\":1.5,\"rate\":"+S.rate+"}]}\n\nCritical rules: unit price must be > 0 for every material. Use real current prices. Labor rate $"+S.rate+"/hr."}])}]})});var d=await r.json();var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var j=JSON.parse(raw);if(j.materials){mats=j.materials.map(function(m){return{id:uid(),name:m.name,qty:m.qty||1,unit:+(m.unit)||0}});renderMats()}if(j.labor){labs=j.labor.map(function(l){return{id:uid(),name:l.name,hrs:+(l.hrs)||1,rate:+(l.rate)||S.rate}});renderLabs()}setTimeout(function(){calcT();},100);document.getElementById("aistat").textContent="";toast("AI estimate ready!")}catch(e){document.getElementById("aistat").textContent="Error: "+e.message;console.error(e)}}
 async function runUpsells(){if(!S.apiKey){toast("Add API key in Settings");return}var desc=document.getElementById("fjd").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Finding upsells...";try{var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:500,messages:[{role:"user",content:"Job: \""+desc+"\". Suggest 3-4 upsell add-ons. ONLY JSON: [{title,desc,price}]"}]})});var d=await r.json();var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var items=JSON.parse(raw);document.getElementById("ulist").innerHTML=items.map(function(u){return"<div style=margin-bottom:8px><strong style=font-size:12px;color:#2d6a32>"+u.title+"</strong> <span style=color:var(--au);font-size:11px;font-weight:700>"+u.price+"</span><div style=font-size:11px;color:#555;margin-top:2px>"+u.desc+"</div></div>"}).join("");document.getElementById("ubox").style.display="block";document.getElementById("aistat").textContent=""}catch(e){document.getElementById("aistat").textContent="Error";console.error(e)}}
-load();
+tryResumeSession();
 
 // ── SCHEDULE PICKER ──────────────────────────────────────────────────────────
 function openSchedPicker(){
@@ -774,7 +895,7 @@ async function confirmSched(){
       await qUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs}));
       persistLocal();
       try{
-        var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+SKEY,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
+        var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
         var zj=await zr.json();
         if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
       }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
@@ -807,7 +928,7 @@ async function retryZohoSync(id){
   toast("Retrying calendar sync...");
   var ok=true;
   try{
-    var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+SKEY,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
+    var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
     var zj=await zr.json();
     if(!zj.ok){console.error("Zoho retry failed:",zj.error);ok=false;}
   }catch(e){console.error("Zoho retry error:",e);ok=false;}
