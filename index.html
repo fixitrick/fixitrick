@@ -124,6 +124,14 @@ textarea{resize:vertical;min-height:64px}
     <div class="card" style="margin:0"><div class="ct">Pipeline</div><div id="dpipe" style="font-size:12px;color:var(--muted);line-height:1.9"></div></div>
   </div>
   
+  <div class="owed-card" id="followup-section" style="display:none">
+    <div class="ct">New Leads Awaiting Contact</div>
+    <div id="followup-list"></div>
+  </div>
+  <div class="owed-card" id="unscheduled-section" style="display:none">
+    <div class="ct">Approved — Not Yet Scheduled</div>
+    <div id="unscheduled-list"></div>
+  </div>
   <div class="owed-card" id="owed-section" style="display:none">
     <div class="ct">Outstanding Invoices — What You're Owed</div>
     <div id="owed-list"></div>
@@ -491,6 +499,31 @@ function renderDB(){
   var st={};ests.forEach(function(e){st[e.status]=(st[e.status]||0)+1});
   document.getElementById("dpipe").innerHTML=Object.keys(st).map(function(k){return"<span class=\"badge "+k+"\">"+k+"</span> <strong>"+st[k]+"</strong>"}).join("<br>");
 
+  // New leads awaiting first contact
+  var newLeads=leads.filter(function(l){return l.status==="new"}).sort(function(a,b){return a.created-b.created});
+  var followSec=document.getElementById("followup-section");
+  if(newLeads.length){
+    followSec.style.display="block";
+    document.getElementById("followup-list").innerHTML=newLeads.map(function(l){
+      var age=ageLabel(l.created);
+      var border=ageBorder(l.created);
+      var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
+      return "<div class='owed-row' style='"+border+";padding-left:8px'><div style='flex:1'><div class='lin'>"+esc(l.name||"")+" <span style='font-size:10px;font-weight:600;"+ageColor+"'>"+age+"</span></div><div class='lim'>"+esc(l.source||"")+(l.phone?" \u00b7 "+esc(l.phone):"")+"</div></div><div style='display:flex;gap:6px;align-items:center'><button class='bs2' style='padding:4px 9px;font-size:11px' onclick='updateLeadStatus(\"'+l.id+'\",\"contacted\")'>Contacted</button><button class='bp' style='padding:4px 9px;font-size:11px' onclick='convertLead(\"'+l.id+'\")'>\u2192 Estimate</button></div></div>";
+    }).join("");
+  }else{followSec.style.display="none";}
+
+  // Approved estimates not yet scheduled
+  var unscheduled=ests.filter(function(e){return e.status==="approved"&&!e.schedDate}).sort(function(a,b){return a.created-b.created});
+  var unschedSec=document.getElementById("unscheduled-section");
+  if(unscheduled.length){
+    unschedSec.style.display="block";
+    document.getElementById("unscheduled-list").innerHTML=unscheduled.map(function(e){
+      var age=ageLabel(e.created);
+      var border=ageBorder(e.created);
+      return "<div class='owed-row' style='"+border+";padding-left:8px;cursor:pointer' onclick='openEF(\""+e.id+"\")'><div style='flex:1'><div class='lin'>"+esc(e.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>"+age+"</span></div><div class='lim'>"+esc(e.estNum||"")+" \u00b7 "+fmt(e.total)+"</div></div></div>";
+    }).join("");
+  }else{unschedSec.style.display="none";}
+
   // Outstanding invoices detail
   var unpaid=invs.filter(function(i){return!i.paid}).sort(function(a,b){return a.dueDate-b.dueDate});
   var owedSec=document.getElementById("owed-section");
@@ -598,7 +631,7 @@ async function saveLead(){
 async function updateLeadStatus(id,stat){
   for(var i=0;i<leads.length;i++){if(leads[i].id===id){leads[i].status=stat;await qUp("fir_leads",l2db(leads[i]));break;}}
   persistLocal();
-  renderLL();toast("Status updated");
+  renderLL();renderDB();toast("Status updated");
 }
 function convertLead(id){
   var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===id){l=leads[i];break}}
