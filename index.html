@@ -502,41 +502,35 @@ function renderDB(){
   // New leads awaiting first contact
   var newLeads=leads.filter(function(l){return l.status==="new"}).sort(function(a,b){return a.created-b.created});
   var followSec=document.getElementById("followup-section");
-  if(newLeads.length){
-    followSec.style.display="block";
-    document.getElementById("followup-list").innerHTML=newLeads.map(function(l){
-      var age=ageLabel(l.created);
-      var border=ageBorder(l.created);
-      var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
-      return "<div class='owed-row' style='"+border+";padding-left:8px'><div style='flex:1'><div class='lin'>"+esc(l.name||"")+" <span style='font-size:10px;font-weight:600;"+ageColor+"'>"+age+"</span></div><div class='lim'>"+esc(l.source||"")+(l.phone?" \u00b7 "+esc(l.phone):"")+"</div></div><div style='display:flex;gap:6px;align-items:center'><button class='bs2' style='padding:4px 9px;font-size:11px' onclick='updateLeadStatus(\"'+l.id+'\",\"contacted\")'>Contacted</button><button class='bp' style='padding:4px 9px;font-size:11px' onclick='convertLead(\"'+l.id+'\")'>\u2192 Estimate</button></div></div>";
-    }).join("");
-  }else{followSec.style.display="none";}
+  followSec.style.display="block";
+  document.getElementById("followup-list").innerHTML=newLeads.length?newLeads.map(function(l){
+    var age=ageLabel(l.created);
+    var border=ageBorder(l.created);
+    var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
+    return "<div class='owed-row' style='"+border+";padding-left:8px'><div style='flex:1'><div class='lin'>"+esc(l.name||"")+" <span style='font-size:10px;font-weight:600;"+ageColor+"'>"+age+"</span></div><div class='lim'>"+esc(l.source||"")+(l.phone?" \u00b7 "+esc(l.phone):"")+"</div></div><div style='display:flex;gap:6px;align-items:center'><button class='bs2' style='padding:4px 9px;font-size:11px' onclick='updateLeadStatus(\"'+l.id+'\",\"contacted\")'>Contacted</button><button class='bp' style='padding:4px 9px;font-size:11px' onclick='convertLead(\"'+l.id+'\")'>\u2192 Estimate</button></div></div>";
+  }).join(""):"<div class='es' style='padding:1rem'>No leads waiting on contact.</div>";
 
   // Approved estimates not yet scheduled
   var unscheduled=ests.filter(function(e){return e.status==="approved"&&!e.schedDate}).sort(function(a,b){return a.created-b.created});
   var unschedSec=document.getElementById("unscheduled-section");
-  if(unscheduled.length){
-    unschedSec.style.display="block";
-    document.getElementById("unscheduled-list").innerHTML=unscheduled.map(function(e){
-      var age=ageLabel(e.created);
-      var border=ageBorder(e.created);
-      return "<div class='owed-row' style='"+border+";padding-left:8px;cursor:pointer' onclick='openEF(\""+e.id+"\")'><div style='flex:1'><div class='lin'>"+esc(e.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>"+age+"</span></div><div class='lim'>"+esc(e.estNum||"")+" \u00b7 "+fmt(e.total)+"</div></div></div>";
-    }).join("");
-  }else{unschedSec.style.display="none";}
+  unschedSec.style.display="block";
+  document.getElementById("unscheduled-list").innerHTML=unscheduled.length?unscheduled.map(function(e){
+    var age=ageLabel(e.created);
+    var border=ageBorder(e.created);
+    return "<div class='owed-row' style='"+border+";padding-left:8px;cursor:pointer' onclick='openEF(\""+e.id+"\")'><div style='flex:1'><div class='lin'>"+esc(e.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>"+age+"</span></div><div class='lim'>"+esc(e.estNum||"")+" \u00b7 "+fmt(e.total)+"</div></div></div>";
+  }).join(""):"<div class='es' style='padding:1rem'>Nothing approved and unscheduled.</div>";
 
   // Outstanding invoices detail
   var unpaid=invs.filter(function(i){return!i.paid}).sort(function(a,b){return a.dueDate-b.dueDate});
   var owedSec=document.getElementById("owed-section");
-  if(unpaid.length){
-    owedSec.style.display="block";
-    var now=Date.now();
-    document.getElementById("owed-list").innerHTML=unpaid.map(function(i){
-      var due=new Date(i.dueDate);var daysLeft=Math.round((i.dueDate-now)/(86400000));
-      var overTag=daysLeft<0?"<span class=\'overdue-tag\'>"+Math.abs(daysLeft)+"d overdue</span>":"";
-      var dueStr=daysLeft>=0?"Due "+due.toLocaleDateString():"Was due "+due.toLocaleDateString();
-      return"<div class=\'owed-row\'><div style=\'flex:1\'><div class=\'lin\'>"+esc(i.customer||"")+"</div><div class=\'lim\'>"+esc(i.invNum||"")+" · "+dueStr+" "+overTag+"</div></div><div style=\'display:flex;gap:6px;align-items:center\'><span class=\'lia\'>"+fmt(i.balance||i.total)+"</span><button class=\'bs2\' style=\'padding:4px 9px;font-size:11px\' onclick=\'markPaid(\"'+i.id+'\")\'>Mark Paid</button></div></div>";
-    }).join("");
-  }else{owedSec.style.display="none";}
+  owedSec.style.display="block";
+  var now=Date.now();
+  document.getElementById("owed-list").innerHTML=unpaid.length?unpaid.map(function(i){
+    var due=new Date(i.dueDate);var daysLeft=Math.round((i.dueDate-now)/(86400000));
+    var overTag=daysLeft<0?"<span class=\'overdue-tag\'>"+Math.abs(daysLeft)+"d overdue</span>":"";
+    var dueStr=daysLeft>=0?"Due "+due.toLocaleDateString():"Was due "+due.toLocaleDateString();
+    return"<div class=\'owed-row\'><div style=\'flex:1\'><div class=\'lin\'>"+esc(i.customer||"")+"</div><div class=\'lim\'>"+esc(i.invNum||"")+" · "+dueStr+" "+overTag+"</div></div><div style=\'display:flex;gap:6px;align-items:center\'><span class=\'lia\'>"+fmt(i.balance||i.total)+"</span><button class=\'bs2\' style=\'padding:4px 9px;font-size:11px\' onclick=\'markPaid(\"'+i.id+'\")\'>Mark Paid</button></div></div>";
+  }).join(""):"<div class='es' style='padding:1rem'>Nothing outstanding.</div>";
   var recent=[].concat(ests.map(function(e){return{date:e.created,text:esc(e.estNum||"")+" - "+esc(e.customer||""),sub:fmt(e.total),status:e.status}}),invs.map(function(i){return{date:i.created,text:esc(i.invNum||"")+" - "+esc(i.customer||""),sub:fmt(i.total),status:i.paid?"paid":"unpaid"}})).sort(function(a,b){return b.date-a.date}).slice(0,8);
   document.getElementById("dact").innerHTML=recent.length?recent.map(function(r){return"<div class=\"li\"><div><div class=\"lin\">"+r.text+"</div><div class=\"lim\">"+r.sub+" · "+new Date(r.date).toLocaleDateString()+"</div></div><span class=\"badge "+r.status+"\">"+r.status+"</span></div>"}).join(""):"<div class=\"es\">No activity yet</div>";
 }
