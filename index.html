@@ -492,7 +492,8 @@ function renderDB(){
   var coll=invs.filter(function(i){return i.paid}).reduce(function(a,i){return a+i.total},0);
   var outst=invs.filter(function(i){return!i.paid}).reduce(function(a,i){return a+i.total},0);
   document.getElementById("dstats").innerHTML="<div class=\"sc\"><div class=\"sv\">"+fmt(tot)+"</div><div class=\"sl\">Estimates value</div></div><div class=\"sc\"><div class=\"sv\">"+fmt(coll)+"</div><div class=\"sl\">Revenue collected</div></div><div class=\"sc\"><div class=\"sv\">"+fmt(outst)+"</div><div class=\"sl\">Outstanding</div></div><div class=\"sc\"><div class=\"sv\">"+ests.length+"</div><div class=\"sl\">Total estimates</div></div>";
-  var appr=ests.filter(function(e){return e.status==="approved"}).length;
+  var wonStatuses=["approved","scheduled","in_progress","complete","invoiced"];
+  var appr=ests.filter(function(e){return wonStatuses.indexOf(e.status)!==-1}).length;
   var decl=ests.filter(function(e){return e.status==="declined"}).length;
   var pend=ests.filter(function(e){return e.status==="draft"||e.status==="sent"}).length;
   var decided=appr+decl;var wr=decided>0?Math.round(appr/decided*100):0;
