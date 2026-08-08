@@ -1030,9 +1030,8 @@ async function emailEst(){
     var j=await r.json();
     if(j.ok){
       e.emailedAt=j.emailedAt;e.emailedTo=j.emailedTo;
-      if(e.status==="draft"){e.status="sent";document.getElementById("fstat").value="sent";updBtns("sent");}
+      if(e.status==="draft"){e.status="sent";document.getElementById("fstat").value="sent";updBtns("sent");if(e.leadId){await updateLeadStatus(e.leadId,"quoted");}}
       await qUp("fir_estimates",e2db(e));
-      if(e.leadId){await updateLeadStatus(e.leadId,"quoted");}
       persistLocal();
       showEmailStatus(j.emailedAt,j.emailedTo);
       toast("Emailed to "+j.emailedTo);
