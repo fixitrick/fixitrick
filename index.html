@@ -851,6 +851,13 @@ async function clearAllData(){
     console.error(e);
   }
 }
+// SCALING NOTE (added Aug 2026): fetches pages sequentially, one 1,000-row batch at a time.
+// Fine at current data volume. If this app ever accumulates tens of thousands of records and
+// the "Loading full history..." pause on first opening Reports becomes noticeably slow, the cheap
+// fix is to fetch all pages in parallel instead of sequentially (get the total count first, then
+// fire all page requests at once). If list views (Estimates/Invoices/Leads) start feeling sluggish
+// to scroll, that's a different, bigger problem: moving Reports' math server-side (SQL aggregation
+// instead of pulling every row into the browser) is the real fix at that point, not this fetch.
 async function fetchAllRows(table,orderClause){
   var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
   var pageSize=1000,offset=0,all=[];
