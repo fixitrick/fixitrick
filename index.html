@@ -141,6 +141,24 @@ textarea{resize:vertical;min-height:64px}
 </div>
 <div id="v-reports" class="view">
   <div class="sh"><h2>Reports</h2></div>
+  <div class="card" style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label style="font-size:13px;font-weight:600">Period:</label>
+    <select id="rpt-period" onchange="rptPeriodChanged()" style="padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+      <option value="all">All Time</option>
+      <option value="month">This Month</option>
+      <option value="lastmonth">Last Month</option>
+      <option value="quarter">This Quarter</option>
+      <option value="year">This Year</option>
+      <option value="12mo">Last 12 Months</option>
+      <option value="custom">Custom Range</option>
+    </select>
+    <span id="rpt-custom-wrap" style="display:none;gap:6px;align-items:center">
+      <input type="date" id="rpt-from" style="padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+      <span style="font-size:13px;color:#999">to</span>
+      <input type="date" id="rpt-to" style="padding:6px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+      <button class="bs2" style="padding:6px 12px;font-size:13px" onclick="renderReports()">Apply</button>
+    </span>
+  </div>
   <div id="rpt-body"></div>
 </div>
 <div id="v-est" class="view"><div class="sh"><h2>Estimates</h2><button class="bp" onclick="openEF(null)">+ New</button></div><div class="card"><input id="est-search" placeholder="Search by name..." oninput="renderEL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="elist"></div><div id="est-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('est')">Load older records</button></div></div></div>
@@ -545,33 +563,79 @@ function renderDB(){
 }
 function monthKey(ts){var d=new Date(ts);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
 function monthLabel(key){var p=key.split("-");var d=new Date(+p[0],+p[1]-1,1);return d.toLocaleDateString([],{month:"short",year:"numeric"});}
+function rptPeriodChanged(){
+  var sel=document.getElementById("rpt-period").value;
+  var wrap=document.getElementById("rpt-custom-wrap");
+  wrap.style.display=sel==="custom"?"inline-flex":"none";
+  if(sel!=="custom")renderReports();
+}
+function rptRange(){
+  var sel=(document.getElementById("rpt-period")||{}).value||"all";
+  var now=new Date();
+  var from=0,to=Date.now();
+  if(sel==="month"){from=new Date(now.getFullYear(),now.getMonth(),1).getTime();}
+  else if(sel==="lastmonth"){from=new Date(now.getFullYear(),now.getMonth()-1,1).getTime();to=new Date(now.getFullYear(),now.getMonth(),1).getTime()-1;}
+  else if(sel==="quarter"){var q=Math.floor(now.getMonth()/3);from=new Date(now.getFullYear(),q*3,1).getTime();}
+  else if(sel==="year"){from=new Date(now.getFullYear(),0,1).getTime();}
+  else if(sel==="12mo"){from=new Date(now.getFullYear(),now.getMonth()-11,1).getTime();}
+  else if(sel==="custom"){
+    var fv=(document.getElementById("rpt-from")||{}).value;
+    var tv=(document.getElementById("rpt-to")||{}).value;
+    from=fv?new Date(fv+"T00:00:00").getTime():0;
+    to=tv?new Date(tv+"T23:59:59").getTime():Date.now();
+  }
+  return{from:from,to:to};
+}
 function rptTable(headers,rows){
   var h="<table style='width:100%;border-collapse:collapse;font-size:13px'><thead><tr>"+headers.map(function(x){return"<th style='text-align:left;padding:6px 8px;border-bottom:2px solid #ddd;color:#666;font-weight:600'>"+x+"</th>"}).join("")+"</tr></thead><tbody>";
   h+=rows.map(function(r){return"<tr>"+r.map(function(c){return"<td style='padding:6px 8px;border-bottom:1px solid #eee'>"+c+"</td>"}).join("")+"</tr>"}).join("");
   h+="</tbody></table>";
   return h;
 }
-function renderReports(){
+async function renderReports(){
+  var body=document.getElementById("rpt-body");
+  var needsLoad=!estAllLoaded||!invAllLoaded||!leadAllLoaded;
+  if(needsLoad){
+    body.innerHTML="<div class='card'><div class='es'>Loading full history for accurate reports...</div></div>";
+    try{
+      var toFetch=[];
+      if(!estAllLoaded)toFetch.push(fetchFullHistory("est"));
+      if(!invAllLoaded)toFetch.push(fetchFullHistory("inv"));
+      if(!leadAllLoaded)toFetch.push(fetchFullHistory("lead"));
+      await Promise.all(toFetch);
+    }catch(e){
+      body.innerHTML="<div class='card'><div class='es'>Couldn't load full history, showing recent data only. Check your connection and reopen Reports to retry.</div></div>";
+    }
+  }
   var wonStatuses=["approved","scheduled","in_progress","complete","invoiced"];
-  // Revenue by month, from invoices. Invoiced total is bucketed by invoice creation date.
-  // Collected total is bucketed by actual payment date (paidAt) when available; for invoices
-  // marked paid before this field existed, it falls back to creation date as the best available estimate.
+  var range=rptRange();
+  function inRange(ts){return ts>=range.from&&ts<=range.to;}
+  // Revenue by month, from invoices. Invoiced total is bucketed by invoice creation date, filtered to range.
+  // Collected total is bucketed by actual payment date (paidAt) when available, also filtered to range independently,
+  // so a job invoiced last month but paid this month correctly counts as collected revenue this month.
   var revByMonth={};
   invs.forEach(function(i){
-    var k=monthKey(i.created);
-    if(!revByMonth[k])revByMonth[k]={invoiced:0,collected:0,outstanding:0};
-    revByMonth[k].invoiced+=i.total||0;
+    if(inRange(i.created)){
+      var k=monthKey(i.created);
+      if(!revByMonth[k])revByMonth[k]={invoiced:0,collected:0,outstanding:0};
+      revByMonth[k].invoiced+=i.total||0;
+      if(!i.paid)revByMonth[k].outstanding+=(i.balance||i.total||0);
+    }
     if(i.paid){
-      var pk=i.paidAt?monthKey(i.paidAt):k;
-      if(!revByMonth[pk])revByMonth[pk]={invoiced:0,collected:0,outstanding:0};
-      revByMonth[pk].collected+=i.total||0;
-    }else revByMonth[k].outstanding+=(i.balance||i.total||0);
+      var payTs=i.paidAt||i.created;
+      if(inRange(payTs)){
+        var pk=monthKey(payTs);
+        if(!revByMonth[pk])revByMonth[pk]={invoiced:0,collected:0,outstanding:0};
+        revByMonth[pk].collected+=i.total||0;
+      }
+    }
   });
   var revKeys=Object.keys(revByMonth).sort().reverse();
   var revRows=revKeys.map(function(k){var r=revByMonth[k];return[monthLabel(k),fmt(r.invoiced),fmt(r.collected),fmt(r.outstanding)]});
-  // Win rate trend by month, from estimates
+  // Win rate trend by month, from estimates, filtered to range
   var winByMonth={};
   ests.forEach(function(e){
+    if(!inRange(e.created))return;
     var k=monthKey(e.created);
     if(!winByMonth[k])winByMonth[k]={won:0,lost:0};
     if(wonStatuses.indexOf(e.status)!==-1)winByMonth[k].won++;
@@ -579,19 +643,23 @@ function renderReports(){
   });
   var winKeys=Object.keys(winByMonth).sort().reverse();
   var winRows=winKeys.map(function(k){var r=winByMonth[k];var tot=r.won+r.lost;var pct=tot?Math.round(r.won/tot*100)+"%":"--";return[monthLabel(k),r.won,r.lost,pct]});
-  // Lead source breakdown, all-time
+  // Lead source breakdown, filtered to range
   var bySource={};
-  leads.forEach(function(l){var s=l.source||"Unknown";bySource[s]=(bySource[s]||0)+1;});
-  var totalLeads=leads.length||1;
+  var leadsInRange=leads.filter(function(l){return inRange(l.created)});
+  leadsInRange.forEach(function(l){var s=l.source||"Unknown";bySource[s]=(bySource[s]||0)+1;});
+  var totalLeads=leadsInRange.length||1;
   var sourceRows=Object.keys(bySource).sort(function(a,b){return bySource[b]-bySource[a]}).map(function(s){return[s,bySource[s],Math.round(bySource[s]/totalLeads*100)+"%"]});
-  // Job type / revenue mix, from estimates, all-time
+  // Job type / revenue mix, from estimates, filtered to range
   var byCat={};
-  ests.forEach(function(e){var c=e.cat||"Uncategorized";if(!byCat[c])byCat[c]={count:0,total:0};byCat[c].count++;byCat[c].total+=e.total||0;});
+  ests.forEach(function(e){
+    if(!inRange(e.created))return;
+    var c=e.cat||"Uncategorized";if(!byCat[c])byCat[c]={count:0,total:0};byCat[c].count++;byCat[c].total+=e.total||0;
+  });
   var catRows=Object.keys(byCat).sort(function(a,b){return byCat[b].total-byCat[a].total}).map(function(c){var r=byCat[c];return[c,r.count,fmt(r.total)]});
 
   var html="";
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Revenue by Month</h3>";
-  html+="<div style='font-size:11px;color:#999;margin-bottom:8px'>Invoiced totals are by invoice date; collected totals are by actual payment date. Invoices marked paid before this tracking was added fall back to their invoice date.</div>";
+  html+="<div style='font-size:11px;color:#999;margin-bottom:8px'>Invoiced and Outstanding are filtered by invoice date. Collected is filtered by actual payment date, so a job invoiced last month but paid this month counts as collected this month. Invoices marked paid before payment-date tracking was added fall back to their invoice date.</div>";
   html+=revRows.length?rptTable(["Month","Invoiced","Collected","Outstanding"],revRows):"<div class='es'>No invoices yet</div>";
   html+="</div>";
 
@@ -775,20 +843,34 @@ async function clearAllData(){
     console.error(e);
   }
 }
+async function fetchAllRows(table,orderClause){
+  var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
+  var pageSize=1000,offset=0,all=[];
+  while(true){
+    var url=SURL+"/rest/v1/"+table+"?select=*&order="+orderClause+"&limit="+pageSize+"&offset="+offset;
+    var r=await fetch(url,{headers:h});
+    if(!r.ok)throw new Error(table+" fetch failed");
+    var batch=await r.json();
+    all=all.concat(batch);
+    if(batch.length<pageSize)break;
+    offset+=pageSize;
+  }
+  return all;
+}
+async function fetchFullHistory(tab){
+  if(tab==="est"){
+    ests=(await fetchAllRows("fir_estimates","created_at.asc")).map(db2e);estAllLoaded=true;
+  }else if(tab==="inv"){
+    invs=(await fetchAllRows("fir_invoices","created_at.asc")).map(db2i);invAllLoaded=true;
+  }else if(tab==="lead"){
+    try{leads=(await fetchAllRows("fir_leads","created_at.asc")).map(db2l);}catch(e){leads=[];}leadAllLoaded=true;
+  }
+}
 async function loadOlder(tab){
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Loading...";}
   try{
-    var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
-    if(tab==="est"){
-      var r=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc",{headers:h});
-      ests=(await r.json()).map(db2e);estAllLoaded=true;renderEL();
-    }else if(tab==="inv"){
-      var r=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc",{headers:h});
-      invs=(await r.json()).map(db2i);invAllLoaded=true;renderIL();
-    }else if(tab==="lead"){
-      var r=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc",{headers:h});
-      try{leads=(await r.json()).map(db2l);}catch(e){leads=[];}leadAllLoaded=true;renderLL();
-    }
+    await fetchFullHistory(tab);
+    if(tab==="est")renderEL();else if(tab==="inv")renderIL();else if(tab==="lead")renderLL();
     syncBadge("Synced",true);
   }catch(e){syncBadge("Error",false);if(btn){btn.disabled=false;btn.textContent="Load older records";}}
 }
