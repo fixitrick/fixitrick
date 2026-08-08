@@ -436,7 +436,17 @@ async function qDel(table,id){
   }catch(e){console.error(e);queueWrite(table,"delete",id);return false;}
 }
 function persistLocal(){
-  ls("fir:e",ests);ls("fir:i",invs);ls("fir:c",clients);ls("fir:x",exps);ls("fir:l",leads);ls("fir:s",S);
+  var cutoff=Date.now()-90*24*60*60*1000;
+  try{
+    ls("fir:e",ests.filter(function(e){return e.created>=cutoff}));
+    ls("fir:i",invs.filter(function(i){return i.created>=cutoff}));
+    ls("fir:c",clients);
+    ls("fir:x",exps.filter(function(x){return x.created>=cutoff}));
+    ls("fir:l",leads.filter(function(l){return l.created>=cutoff}));
+    ls("fir:s",S);
+  }catch(e){
+    console.error("Local offline cache save failed (data is still safe in Supabase):",e);
+  }
 }
 window.addEventListener("online",function(){flushQueue();});
 setInterval(function(){if(pendingQueue.length)flushQueue();},30000);
