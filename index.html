@@ -250,7 +250,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="mb"><label>Job Description</label><textarea id="llj" placeholder="What do they need done?" style="min-height:56px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveLead()">Save Lead</button><button class="bs2" onclick="toggleLF()">Cancel</button></div>
   </div>
-  <div class="card"><input id="lead-search" placeholder="Search leads..." oninput="renderLL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="llist"></div><div id="lead-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('lead')">Load older records</button></div></div>
+  <div class="card"><input id="lead-search" placeholder="Search leads..." oninput="renderLL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-bottom:8px;cursor:pointer"><input type="checkbox" id="lead-hide-lost" onchange="toggleHideLost()"> Hide lost leads</label><div id="llist"></div><div id="lead-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('lead')">Load older records</button></div></div>
 </div>
 <div id="v-set" class="view">
   <div class="sh"><h2>Settings</h2></div>
@@ -727,7 +727,7 @@ function getFormData(){var t=calcT(),isNew=!document.getElementById("feid").valu
 async function saveEst(){var d=getFormData(),isNew=!document.getElementById("feid").value;if(isNew){d.estNum=fmtN(S.nextEst);S.nextEst++;}var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);if(d.customer){var cExists=false;for(var i=0;i<clients.length;i++){if(clients[i].name===d.customer&&clients[i].phone===d.phone){cExists=true;break;}}if(!cExists){var nc={id:uid(),name:d.customer,phone:d.phone||"",email:d.email||"",address:d.address||"",created:Date.now()};clients.push(nc);await qUp("fir_clients",c2db(nc));renderCL();}}await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
 async function markStat(stat){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}for(var i=0;i<ests.length;i++){if(ests[i].id===id){ests[i].status=stat;await qUp("fir_estimates",e2db(ests[i]));break;}}persistLocal();document.getElementById("fstat").value=stat;updBtns(stat);toast("Status: "+stat);}
 async function completeAndInvoice(){var btn=document.getElementById("btn-comp");if(btn){btn.disabled=true;btn.textContent="Working...";}await markStat("complete");await toInvoice();if(btn){btn.disabled=false;btn.textContent="Complete & Invoice";}}
-async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!");sv("inv");}
+async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));if(e.leadId){await updateLeadStatus(e.leadId,"won");}var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!");sv("inv");}
 async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;invs[i].paidAt=Date.now();await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
 
 function toggleLF(){var f=document.getElementById("lform");if(f.style.display==="none"){["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("lls").selectedIndex=0;document.getElementById("lform-title").textContent="New Lead";f.style.display="block";}else{f.style.display="none";}}
@@ -772,8 +772,11 @@ function ageLabel(ts){var m=Math.round((Date.now()-ts)/60000);if(m<60)return m+"
 function ageBorder(ts){var h=(Date.now()-ts)/3600000;if(h>48)return"border-left:3px solid #dc3545";if(h>24)return"border-left:3px solid #fd7e14";return"border-left:3px solid #28a745";}
 function renderLL(){
   var q=(document.getElementById("lead-search")||{}).value||"";
+  var hideLost=!!ls("fir:hideLostLeads");
+  var hlEl=document.getElementById("lead-hide-lost");if(hlEl)hlEl.checked=hideLost;
   var statOrder={new:0,contacted:1,quoted:2,won:3,lost:4};
-  var list=[].concat(leads).sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
+  var list=[].concat(leads).filter(function(l){return l.status!=="won"&&(!hideLost||l.status!=="lost")});
+  list=list.sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
   if(q){var ql=q.toLowerCase();list=list.filter(function(l){return(l.name||"").toLowerCase().includes(ql)||(l.jobDesc||"").toLowerCase().includes(ql)||(l.phone||"").toLowerCase().includes(ql);})}
   document.getElementById("llist").innerHTML=list.length?list.map(function(l){
     var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
@@ -785,6 +788,7 @@ function renderLL(){
   }).join(""):q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>';
   var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
 }
+function toggleHideLost(){var c=document.getElementById("lead-hide-lost");ls("fir:hideLostLeads",!!(c&&c.checked));renderLL();}
 async function delLead(id){if(!confirm("Delete this lead? This can't be undone."))return;leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 
 
