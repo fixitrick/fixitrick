@@ -268,12 +268,12 @@ textarea{resize:vertical;min-height:64px}
   <div class="card"><div class="ct">Defaults</div>
     <div class="mb"><label>Payment Terms</label><textarea id="spt" style="min-height:48px"></textarea></div>
     <div class="r2"><div class="mb"><label>Estimate valid (days)</label><input type="number" id="sev" value="30" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Invoice due (days)</label><input type="number" id="sid" value="30" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
-    <div class="mb"><label>Next Estimate #</label><input type="number" id="sne" value="1" min="1" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
+    <div class="r2"><div class="mb"><label>Next Estimate #</label><input type="number" id="sne" value="1" min="1" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Next Invoice #</label><input type="number" id="sni" value="1" min="1" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="br"><button class="bp" onclick="saveSettings()">Save Settings</button></div>
   <div class="card" style="border:1px solid #f5c6cb">
     <div class="ct" style="color:#721c24">Danger Zone</div>
-    <p style="font-size:12px;color:#555;margin:0 0 10px">Permanently deletes all estimates, invoices, clients, leads, and expenses. Your settings and business info are not affected.</p>
+    <p style="font-size:12px;color:#555;margin:0 0 10px">Permanently deletes all estimates, invoices, clients, leads, and expenses, and resets estimate/invoice numbering back to 001. Your business info and other settings are not affected.</p>
     <button class="bs2" style="background:#dc3545;color:#fff;border-color:#dc3545" onclick="clearAllData()">Clear All Data</button>
   </div>
 </div>
@@ -383,7 +383,6 @@ document.getElementById("app").style.display="none";
 var EMAIL_FN_URL = SURL + "/functions/v1/send-document";
 var ests=[],invs=[],clients=[],exps=[],leads=[],mats=[],labs=[],photos=[],pendingPhotoDeletes=[];
 var estAllLoaded=false,invAllLoaded=false,leadAllLoaded=false;
-var _synced=false;
 
 // Supabase helpers
 async function sbUp(table,row){var r=await fetch(SURL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());}
@@ -449,7 +448,7 @@ function persistLocal(){
 window.addEventListener("online",function(){flushQueue();});
 setInterval(function(){if(pendingQueue.length)flushQueue();},30000);
 
-var S={biz:"FixItRick Home Repair Services",phone:"614-966-2311",email:"rickh@fixitrick.com",web:"fixitrick.com",apiKey:"",rate:100,markup:20,tax:0,terms:"Payment due within 30 days. Checks payable to Rick H.\nVenmo/Zelle: 614-966-2311",valid:30,due:30,nextEst:1};
+var S={biz:"FixItRick Home Repair Services",phone:"614-966-2311",email:"rickh@fixitrick.com",web:"fixitrick.com",apiKey:"",rate:100,markup:20,tax:0,terms:"Payment due within 30 days. Checks payable to Rick H.\nVenmo/Zelle: 614-966-2311",valid:30,due:30,nextEst:1,nextInv:1};
 function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}else{localStorage.setItem(k,JSON.stringify(v))}}
 // Row mappers
 function e2db(e){return{id:e.id,est_num:e.estNum||"",customer:e.customer||"",phone:e.phone||"",email:e.email||"",address:e.address||"",cat:e.cat||"",description:e.desc||"",notes:e.notes||"",markup_pct:e.markupPct||0,tax_pct:e.taxPct||0,discount:e.discount||0,deposit:e.deposit||0,total:e.total||0,balance:e.balance||0,status:e.status||"draft",lead_id:e.leadId||null,mats:e.mats||[],labs:e.labs||[],photos:e.photos||[],created_at:e.created||Date.now(),updated_at:Date.now(),emailed_at:e.emailedAt||null,emailed_to:e.emailedTo||null,zoho_sync_ok:e.zohoSyncOk!==false};}
@@ -569,7 +568,6 @@ function renderDB(){
   var recent=[].concat(ests.map(function(e){return{date:e.created,text:esc(e.estNum||"")+" - "+esc(e.customer||""),sub:fmt(e.total),status:e.status}}),invs.map(function(i){return{date:i.created,text:esc(i.invNum||"")+" - "+esc(i.customer||""),sub:fmt(i.total),status:i.paid?"paid":"unpaid"}})).sort(function(a,b){return b.date-a.date}).slice(0,8);
   document.getElementById("dact").innerHTML=recent.length?recent.map(function(r){return"<div class=\"li\"><div><div class=\"lin\">"+r.text+"</div><div class=\"lim\">"+r.sub+" · "+new Date(r.date).toLocaleDateString()+"</div></div><span class=\"badge "+r.status+"\">"+r.status+"</span></div>"}).join(""):"<div class=\"es\">No activity yet</div>";
 }
-function monthKey(ts){var d=new Date(ts);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
 function monthLabel(key){var p=key.split("-");var d=new Date(+p[0],+p[1]-1,1);return d.toLocaleDateString([],{month:"short",year:"numeric"});}
 function rptPeriodChanged(){
   var sel=document.getElementById("rpt-period").value;
@@ -600,70 +598,38 @@ function rptTable(headers,rows){
   h+="</tbody></table>";
   return h;
 }
+async function rptRpc(fn,range){
+  var res=await fetch(SURL+"/rest/v1/rpc/"+fn,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"},body:JSON.stringify({p_from:range.from,p_to:range.to})});
+  if(!res.ok)throw new Error(fn+" failed");
+  return res.json();
+}
 async function renderReports(){
   var body=document.getElementById("rpt-body");
-  var needsLoad=!estAllLoaded||!invAllLoaded||!leadAllLoaded;
-  if(needsLoad){
-    body.innerHTML="<div class='card'><div class='es'>Loading full history for accurate reports...</div></div>";
-    try{
-      var toFetch=[];
-      if(!estAllLoaded)toFetch.push(fetchFullHistory("est"));
-      if(!invAllLoaded)toFetch.push(fetchFullHistory("inv"));
-      if(!leadAllLoaded)toFetch.push(fetchFullHistory("lead"));
-      await Promise.all(toFetch);
-    }catch(e){
-      body.innerHTML="<div class='card'><div class='es'>Couldn't load full history, showing recent data only. Check your connection and reopen Reports to retry.</div></div>";
-    }
-  }
-  var wonStatuses=["approved","scheduled","in_progress","complete","invoiced"];
+  body.innerHTML="<div class='card'><div class='es'>Loading reports...</div></div>";
   var range=rptRange();
-  function inRange(ts){return ts>=range.from&&ts<=range.to;}
+  var revData,winData,sourceData,catData;
+  try{
+    var results=await Promise.all([
+      rptRpc("rpt_revenue_by_month",range),
+      rptRpc("rpt_win_rate",range),
+      rptRpc("rpt_lead_source_breakdown",range),
+      rptRpc("rpt_job_type_mix",range)
+    ]);
+    revData=results[0];winData=results[1];sourceData=results[2];catData=results[3];
+  }catch(e){
+    body.innerHTML="<div class='card'><div class='es'>Couldn't load reports. Check your connection and reopen Reports to retry.</div></div>";
+    return;
+  }
   // Revenue by month, from invoices. Invoiced total is bucketed by invoice creation date, filtered to range.
   // Collected total is bucketed by actual payment date (paidAt) when available, also filtered to range independently,
   // so a job invoiced last month but paid this month correctly counts as collected revenue this month.
-  var revByMonth={};
-  invs.forEach(function(i){
-    if(inRange(i.created)){
-      var k=monthKey(i.created);
-      if(!revByMonth[k])revByMonth[k]={invoiced:0,collected:0,outstanding:0};
-      revByMonth[k].invoiced+=i.total||0;
-      if(!i.paid)revByMonth[k].outstanding+=(i.balance||i.total||0);
-    }
-    if(i.paid){
-      var payTs=i.paidAt||i.created;
-      if(inRange(payTs)){
-        var pk=monthKey(payTs);
-        if(!revByMonth[pk])revByMonth[pk]={invoiced:0,collected:0,outstanding:0};
-        revByMonth[pk].collected+=i.total||0;
-      }
-    }
-  });
-  var revKeys=Object.keys(revByMonth).sort().reverse();
-  var revRows=revKeys.map(function(k){var r=revByMonth[k];return[monthLabel(k),fmt(r.invoiced),fmt(r.collected),fmt(r.outstanding)]});
+  var revRows=revData.map(function(r){return[monthLabel(r.month_key),fmt(r.invoiced),fmt(r.collected),fmt(r.outstanding)]});
   // Win rate trend by month, from estimates, filtered to range
-  var winByMonth={};
-  ests.forEach(function(e){
-    if(!inRange(e.created))return;
-    var k=monthKey(e.created);
-    if(!winByMonth[k])winByMonth[k]={won:0,lost:0};
-    if(wonStatuses.indexOf(e.status)!==-1)winByMonth[k].won++;
-    else if(e.status==="declined")winByMonth[k].lost++;
-  });
-  var winKeys=Object.keys(winByMonth).sort().reverse();
-  var winRows=winKeys.map(function(k){var r=winByMonth[k];var tot=r.won+r.lost;var pct=tot?Math.round(r.won/tot*100)+"%":"--";return[monthLabel(k),r.won,r.lost,pct]});
+  var winRows=winData.map(function(r){var tot=r.won+r.lost;var pct=tot?Math.round(r.won/tot*100)+"%":"--";return[monthLabel(r.month_key),r.won,r.lost,pct]});
   // Lead source breakdown, filtered to range
-  var bySource={};
-  var leadsInRange=leads.filter(function(l){return inRange(l.created)});
-  leadsInRange.forEach(function(l){var s=l.source||"Unknown";bySource[s]=(bySource[s]||0)+1;});
-  var totalLeads=leadsInRange.length||1;
-  var sourceRows=Object.keys(bySource).sort(function(a,b){return bySource[b]-bySource[a]}).map(function(s){return[s,bySource[s],Math.round(bySource[s]/totalLeads*100)+"%"]});
+  var sourceRows=sourceData.map(function(r){return[r.source,r.lead_count,r.pct_of_total+"%"]});
   // Job type / revenue mix, from estimates, filtered to range
-  var byCat={};
-  ests.forEach(function(e){
-    if(!inRange(e.created))return;
-    var c=e.cat||"Uncategorized";if(!byCat[c])byCat[c]={count:0,total:0};byCat[c].count++;byCat[c].total+=e.total||0;
-  });
-  var catRows=Object.keys(byCat).sort(function(a,b){return byCat[b].total-byCat[a].total}).map(function(c){var r=byCat[c];return[c,r.count,fmt(r.total)]});
+  var catRows=catData.map(function(r){return[r.category,r.est_count,fmt(r.total_value)]});
 
   var html="";
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Revenue by Month</h3>";
@@ -693,7 +659,7 @@ function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";
 async function delClient(id){if(!confirm("Delete this client? This can't be undone."))return;clients=clients.filter(function(c){return c.id!==id});renderCL();toast("Client deleted");var ok=await qDel("fir_clients",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"editExpense('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>"}
 async function delExp(id){if(!confirm("Delete this expense? This can't be undone."))return;exps=exps.filter(function(e){return e.id!==id});renderXL();toast("Expense deleted");var ok=await qDel("fir_expenses",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
-function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sak").value=S.apiKey||"";document.getElementById("sr").value=S.rate||100;document.getElementById("sm").value=S.markup||20;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=S.valid||30;document.getElementById("sid").value=(S.due===undefined||S.due===null)?30:S.due;document.getElementById("sne").value=S.nextEst||1}
+function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sak").value=S.apiKey||"";document.getElementById("sr").value=S.rate||100;document.getElementById("sm").value=S.markup||20;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=S.valid||30;document.getElementById("sid").value=(S.due===undefined||S.due===null)?30:S.due;document.getElementById("sne").value=S.nextEst||1;document.getElementById("sni").value=S.nextInv||1}
 async function saveSettings(){
   S.biz=document.getElementById("sb").value||"FixItRick";
   S.phone=document.getElementById("sp").value;
@@ -709,6 +675,7 @@ async function saveSettings(){
   S.valid=+document.getElementById("sev").value||30;
   (function(){var v=document.getElementById("sid").value;S.due=(v===""?30:+v);})();
   S.nextEst=+document.getElementById("sne").value||1;
+  S.nextInv=+document.getElementById("sni").value||1;
   var toCloud=Object.assign({},S);
   delete toCloud.apiKey;
   document.getElementById("hbiz").textContent=S.biz;
@@ -760,7 +727,7 @@ function getFormData(){var t=calcT(),isNew=!document.getElementById("feid").valu
 async function saveEst(){var d=getFormData(),isNew=!document.getElementById("feid").value;if(isNew){d.estNum=fmtN(S.nextEst);S.nextEst++;}var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);if(d.customer){var cExists=false;for(var i=0;i<clients.length;i++){if(clients[i].name===d.customer&&clients[i].phone===d.phone){cExists=true;break;}}if(!cExists){var nc={id:uid(),name:d.customer,phone:d.phone||"",email:d.email||"",address:d.address||"",created:Date.now()};clients.push(nc);await qUp("fir_clients",c2db(nc));renderCL();}}await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
 async function markStat(stat){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}for(var i=0;i<ests.length;i++){if(ests[i].id===id){ests[i].status=stat;await qUp("fir_estimates",e2db(ests[i]));break;}}persistLocal();document.getElementById("fstat").value=stat;updBtns(stat);toast("Status: "+stat);}
 async function completeAndInvoice(){var btn=document.getElementById("btn-comp");if(btn){btn.disabled=true;btn.textContent="Working...";}await markStat("complete");await toInvoice();if(btn){btn.disabled=false;btn.textContent="Complete & Invoice";}}
-async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(invs.length+1);var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));persistLocal();toast("Invoice "+num+" created!");sv("inv");}
+async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!");sv("inv");}
 async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;invs[i].paidAt=Date.now();await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
 
 function toggleLF(){var f=document.getElementById("lform");if(f.style.display==="none"){["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("lls").selectedIndex=0;document.getElementById("lform-title").textContent="New Lead";f.style.display="block";}else{f.style.display="none";}}
@@ -844,6 +811,12 @@ async function clearAllData(){
     }));
     ests=[];invs=[];clients=[];exps=[];leads=[];
     estAllLoaded=false;invAllLoaded=false;leadAllLoaded=false;
+    S.nextEst=1;S.nextInv=1;
+    var toCloud=Object.assign({},S);
+    delete toCloud.apiKey;
+    await qUp("fir_settings",{id:"main",data:toCloud});
+    var sneEl=document.getElementById("sne");if(sneEl)sneEl.value=1;
+    var sniEl=document.getElementById("sni");if(sniEl)sniEl.value=1;
     toast("All data cleared.");
     syncBadge("Synced",true);
   }catch(e){
