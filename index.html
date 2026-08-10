@@ -237,7 +237,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="mb"><label>Description</label><input id="exn" placeholder="What was this for?" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveExp()">Log It</button><button class="bs2" onclick="toggleEF()">Cancel</button></div>
   </div>
-  <div class="card"><div id="exlist"></div></div>
+  <div class="card"><div id="exlist"></div><div id="exp-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('exp')">Load older records</button></div></div>
 </div>
 
 <div id="v-leads" class="view">
@@ -382,7 +382,7 @@ document.getElementById("login-pw").addEventListener("keydown",function(ev){if(e
 document.getElementById("app").style.display="none";
 var EMAIL_FN_URL = SURL + "/functions/v1/send-document";
 var ests=[],invs=[],clients=[],exps=[],leads=[],mats=[],labs=[],photos=[],pendingPhotoDeletes=[];
-var estAllLoaded=false,invAllLoaded=false,leadAllLoaded=false;
+var estAllLoaded=false,invAllLoaded=false,leadAllLoaded=false,expAllLoaded=false;
 
 // Supabase helpers
 async function sbUp(table,row){var r=await fetch(SURL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());}
@@ -657,7 +657,7 @@ function renderIL(){var q=(document.getElementById("inv-search")||{}).value||"";
 async function delInv(id){if(!confirm("Delete this invoice? This can't be undone."))return;invs=invs.filter(function(i){return i.id!==id});renderIL();renderDB();toast("Invoice deleted");var ok=await qDel("fir_invoices",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";var list=clients;if(q){var ql=q.toLowerCase();list=list.filter(function(c){return(c.name||"").toLowerCase().includes(ql)||(c.phone||"").toLowerCase().includes(ql);})}document.getElementById("clist").innerHTML=list.length?list.map(function(c){return'<div class="li"><div onclick="editClient(\''+c.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+esc(c.name)+(c.notes?' <span title="'+esc(c.notes)+'">📝</span>':'')+'</div><div class="lim">'+esc(c.phone||"")+' '+esc(c.email||"")+'</div></div><div style="display:flex;gap:6px;align-items:center"><button class="bs2" style="padding:4px 9px;font-size:11px" onclick="event.stopPropagation();estFromClient(\''+c.id+'\')" >+ Est</button><button class="db2" style="color:#dc3545;font-size:15px" onclick="event.stopPropagation();delClient(\''+c.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No clients</div>'}
 async function delClient(id){if(!confirm("Delete this client? This can't be undone."))return;clients=clients.filter(function(c){return c.id!==id});renderCL();toast("Client deleted");var ok=await qDel("fir_clients",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
-function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"editExpense('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>"}
+function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"editExpense('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>";var older=document.getElementById("exp-older");if(older)older.style.display=expAllLoaded?"none":"block";}
 async function delExp(id){if(!confirm("Delete this expense? This can't be undone."))return;exps=exps.filter(function(e){return e.id!==id});renderXL();toast("Expense deleted");var ok=await qDel("fir_expenses",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sak").value=S.apiKey||"";document.getElementById("sr").value=S.rate||100;document.getElementById("sm").value=S.markup||20;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=S.valid||30;document.getElementById("sid").value=(S.due===undefined||S.due===null)?30:S.due;document.getElementById("sne").value=S.nextEst||1;document.getElementById("sni").value=S.nextInv||1}
 async function saveSettings(){
@@ -814,7 +814,7 @@ async function clearAllData(){
       }catch(e){console.error(e)}
     }));
     ests=[];invs=[];clients=[];exps=[];leads=[];
-    estAllLoaded=false;invAllLoaded=false;leadAllLoaded=false;
+    estAllLoaded=false;invAllLoaded=false;leadAllLoaded=false;expAllLoaded=false;
     S.nextEst=1;S.nextInv=1;
     var toCloud=Object.assign({},S);
     delete toCloud.apiKey;
@@ -856,13 +856,15 @@ async function fetchFullHistory(tab){
     invs=(await fetchAllRows("fir_invoices","created_at.asc")).map(db2i);invAllLoaded=true;
   }else if(tab==="lead"){
     try{leads=(await fetchAllRows("fir_leads","created_at.asc")).map(db2l);}catch(e){leads=[];}leadAllLoaded=true;
+  }else if(tab==="exp"){
+    exps=(await fetchAllRows("fir_expenses","created_at.asc")).map(db2x);expAllLoaded=true;
   }
 }
 async function loadOlder(tab){
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent="Loading...";}
   try{
     await fetchFullHistory(tab);
-    if(tab==="est")renderEL();else if(tab==="inv")renderIL();else if(tab==="lead")renderLL();
+    if(tab==="est")renderEL();else if(tab==="inv")renderIL();else if(tab==="lead")renderLL();else if(tab==="exp")renderXL();
     syncBadge("Synced",true);
   }catch(e){syncBadge("Error",false);if(btn){btn.disabled=false;btn.textContent="Load older records";}}
 }
