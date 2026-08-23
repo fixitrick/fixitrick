@@ -607,15 +607,16 @@ async function renderReports(){
   var body=document.getElementById("rpt-body");
   body.innerHTML="<div class='card'><div class='es'>Loading reports...</div></div>";
   var range=rptRange();
-  var revData,winData,sourceData,catData;
+  var revData,winData,sourceData,catData,expCatData;
   try{
     var results=await Promise.all([
       rptRpc("rpt_revenue_by_month",range),
       rptRpc("rpt_win_rate",range),
       rptRpc("rpt_lead_source_breakdown",range),
-      rptRpc("rpt_job_type_mix",range)
+      rptRpc("rpt_job_type_mix",range),
+      rptRpc("rpt_expenses_by_category",range)
     ]);
-    revData=results[0];winData=results[1];sourceData=results[2];catData=results[3];
+    revData=results[0];winData=results[1];sourceData=results[2];catData=results[3];expCatData=results[4];
   }catch(e){
     body.innerHTML="<div class='card'><div class='es'>Couldn't load reports. Check your connection and reopen Reports to retry.</div></div>";
     return;
@@ -630,6 +631,9 @@ async function renderReports(){
   var sourceRows=sourceData.map(function(r){return[r.source,r.lead_count,r.pct_of_total+"%"]});
   // Job type / revenue mix, from estimates, filtered to range
   var catRows=catData.map(function(r){return[r.category,r.est_count,fmt(r.total_value)]});
+  // Expenses by category, from fir_expenses, filtered by expense date, for tax record-keeping
+  var expTotal=expCatData.reduce(function(a,r){return a+(+r.total||0)},0);
+  var expRows=expCatData.map(function(r){return[r.category,fmt(r.total),expTotal?Math.round(r.total/expTotal*100)+"%":"--"]});
 
   var html="";
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Revenue by Month</h3>";
@@ -647,6 +651,11 @@ async function renderReports(){
 
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Job Type / Revenue Mix</h3>";
   html+=catRows.length?rptTable(["Category","Count","Total Value"],catRows):"<div class='es'>No estimates yet</div>";
+  html+="</div>";
+
+  html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Expenses by Category</h3>";
+  html+="<div style='font-size:11px;color:#999;margin-bottom:8px'>Filtered by expense date, for tax record-keeping (e.g. Schedule C categories).</div>";
+  html+=expRows.length?rptTable(["Category","Total","% of Total"],expRows)+"<div style='margin-top:8px;font-weight:600;font-size:13px'>Total: "+fmt(expTotal)+"</div>":"<div class='es'>No expenses in this period</div>";
   html+="</div>";
 
   document.getElementById("rpt-body").innerHTML=html;
