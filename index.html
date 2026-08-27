@@ -907,15 +907,17 @@ function buildPrint(d,type,docNum,footer){
   var rows=[];
   (d.mats||[]).forEach(function(m){
     if(!m.name)return;
-    rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">'+esc(m.name)+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:13px;color:#222">'+m.qty+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;color:#222">'+fmt(+(m.unit)||0)+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt((+(m.qty)||1)*(+(m.unit)||0))+'</td></tr>');
+    var mq=(m.qty===undefined||m.qty===null||m.qty==="")?1:+m.qty;
+    rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">'+esc(m.name)+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:13px;color:#222">'+mq+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;color:#222">'+fmt(+(m.unit)||0)+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(mq*(+(m.unit)||0))+'</td></tr>');
   });
   (d.labs||[]).forEach(function(l){
     if(!l.name&&!l.hrs)return;
-    rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">'+esc(l.name||"Labor")+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:13px;color:#222">'+(+(l.hrs)||1)+' hrs</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;color:#222">'+fmt(+(l.rate)||S.rate)+'/hr</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt((+(l.hrs)||1)*(+(l.rate)||S.rate||100))+'</td></tr>');
+    var lh=(l.hrs===undefined||l.hrs===null||l.hrs==="")?1:+l.hrs;
+    rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">'+esc(l.name||"Labor")+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:13px;color:#222">'+lh+' hrs</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;color:#222">'+fmt(+(l.rate)||S.rate)+'/hr</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(lh*(+(l.rate)||S.rate||100))+'</td></tr>');
   });
   var t=+(d.total)||0,dep=+(d.deposit)||0,bal=+(d.balance)||(t-dep);
-  var subtotal_mat=(d.mats||[]).reduce(function(a,m){return a+(+(m.qty)||1)*(+(m.unit)||0)},0);
-  var subtotal_lab=(d.labs||[]).reduce(function(a,l){return a+(+(l.hrs)||1)*(+(l.rate)||S.rate||100)},0);
+  var subtotal_mat=(d.mats||[]).reduce(function(a,m){var mq=(m.qty===undefined||m.qty===null||m.qty==="")?1:+m.qty;return a+mq*(+(m.unit)||0)},0);
+  var subtotal_lab=(d.labs||[]).reduce(function(a,l){var lh=(l.hrs===undefined||l.hrs===null||l.hrs==="")?1:+l.hrs;return a+lh*(+(l.rate)||S.rate||100)},0);
   var markup_pct=+(d.markupPct)||0;
   var markup_amt=(subtotal_mat+subtotal_lab)*markup_pct/100;
   var tax_pct=+(d.taxPct)||0;
