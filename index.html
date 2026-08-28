@@ -241,7 +241,7 @@ textarea{resize:vertical;min-height:64px}
 </div>
 
 <div id="v-leads" class="view">
-  <div class="sh"><h2>Leads</h2><button class="bp" onclick="toggleLF()">+ Add Lead</button></div>
+  <div class="sh"><h2>Leads</h2><div style="display:flex;gap:8px"><button class="bp" style="background:var(--bg);color:var(--g);border:1px solid #ddd" onclick="refreshLeads()" id="leadRefreshBtn">⟳ Refresh</button><button class="bp" onclick="toggleLF()">+ Add Lead</button></div></div>
   <div class="card" id="lform" style="display:none"><div class="ct" id="lform-title">New Lead</div>
     <input type="hidden" id="llid" autocomplete="off" autocorrect="off" autocapitalize="off">
     <div class="r2"><div class="mb"><label>Name</label><input id="lln" placeholder="Jane Smith" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><input id="llp" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
@@ -779,6 +779,25 @@ function convertLead(id){
 }
 function ageLabel(ts){var m=Math.round((Date.now()-ts)/60000);if(m<60)return m+"m ago";var h=Math.round(m/60);if(h<24)return h+"h ago";return Math.floor(h/24)+"d ago";}
 function ageBorder(ts){var h=(Date.now()-ts)/3600000;if(h>48)return"border-left:3px solid #dc3545";if(h>24)return"border-left:3px solid #fd7e14";return"border-left:3px solid #28a745";}
+async function refreshLeads(){
+  var btn=document.getElementById("leadRefreshBtn");
+  if(btn){btn.disabled=true;btn.textContent="⟳ Refreshing...";}
+  try{
+    var cutoff=Date.now()-90*24*60*60*1000;
+    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    if(!rl.ok)throw new Error("fetch failed");
+    leads=(await rl.json()).map(db2l);
+    leadAllLoaded=false;
+    renderLL();
+    persistLocal();
+    toast("Leads refreshed");
+  }catch(e){
+    console.error("Lead refresh error:",e);
+    toast("Couldn't refresh — check connection");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent="⟳ Refresh";}
+  }
+}
 function renderLL(){
   var q=(document.getElementById("lead-search")||{}).value||"";
   var hideLost=!!ls("fir:hideLostLeads");
