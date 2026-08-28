@@ -728,9 +728,9 @@ function openHowTo(jobType){
       '<input type="file" accept="image/*" capture="environment" id="howto-photo-input" style="display:none" onchange="handleHowToPhoto(event)">'+
       '<div id="howto-photo-preview"></div>'+
       '<button class="bs2" style="width:100%" onclick="document.getElementById(\'howto-photo-input\').click()">Take photo</button>'+
-      '<input id="howto-question" placeholder="Optional question (e.g. is this normal?)" style="margin-top:8px" autocomplete="off" autocorrect="off" autocapitalize="off">'+
-      '<button class="bp" id="howto-ask-btn" style="display:none;width:100%;margin-top:8px" onclick="askAboutPhoto()">Ask AI</button>'+
       '<div id="howto-photo-answer" style="margin-top:8px"></div>'+
+      '<input id="howto-question" placeholder="Optional question (e.g. is this normal?)" style="margin-top:8px;display:none" autocomplete="off" autocorrect="off" autocapitalize="off">'+
+      '<button class="bp" id="howto-ask-btn" style="display:none;width:100%;margin-top:8px" onclick="askAboutPhoto()">Ask AI</button>'+
     '</div>';
   document.getElementById("howto-sheet").style.display="flex";
 }
@@ -790,6 +790,7 @@ async function handleHowToPhoto(evt){
   howtoConvoDisplay=[];
   document.getElementById("howto-photo-preview").innerHTML='<img src="'+dataUrl+'" style="width:100%;border-radius:8px;margin-top:6px">';
   document.getElementById("howto-ask-btn").style.display="";
+  document.getElementById("howto-question").style.display="";
   document.getElementById("howto-photo-answer").innerHTML="";
 }
 async function askAboutPhoto(){
@@ -829,6 +830,10 @@ function renderHowtoConvo(pending){
   }).join("");
   if(pending)html+='<div class="es" style="margin-top:6px">Asking AI...</div>';
   document.getElementById("howto-photo-answer").innerHTML=html;
+  if(!pending){
+    var q=document.getElementById("howto-question");
+    if(q)setTimeout(function(){q.scrollIntoView({block:"center"});q.focus()},50);
+  }
 }
 function renderPhotos(){document.getElementById("photostrip").innerHTML=photos.map(function(p,i){return"<div style=\"position:relative\"><img src=\""+p.url+"\" style=\"width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd\" onclick=\"window.open('"+p.url+"','_blank')\"><button style=\"position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;font-size:13px;line-height:1;border:none;border-radius:50%;background:#dc3545;color:#fff;cursor:pointer\" onclick=\"delPhoto("+i+")\">x</button></div>"}).join("")}
 function photoPathFromUrl(url){var marker="/storage/v1/object/public/fir-photos/";var idx=url.indexOf(marker);return idx>=0?url.slice(idx+marker.length):null}
