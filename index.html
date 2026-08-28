@@ -718,7 +718,18 @@ function updBtns(s){
 }
 function openHowTo(jobType){
   document.getElementById("howto-jobtype").value=jobType||"";
-  document.getElementById("howto-body").innerHTML='<div class="es">Tap "Get guide" to generate a how-to for this job.</div>';
+  howtoPhotoBase64=null;
+  document.getElementById("howto-body").innerHTML=
+    '<div id="howto-guide-content"><div class="es">Tap "Get guide" to generate a how-to for this job.</div></div>'+
+    '<div class="card" style="margin-top:8px">'+
+      '<div class="ct">Ask AI about a photo</div>'+
+      '<input type="file" accept="image/*" capture="environment" id="howto-photo-input" style="display:none" onchange="handleHowToPhoto(event)">'+
+      '<div id="howto-photo-preview"></div>'+
+      '<button class="bs2" style="width:100%" onclick="document.getElementById(\'howto-photo-input\').click()">Take photo</button>'+
+      '<input id="howto-question" placeholder="Optional question (e.g. is this normal?)" style="margin-top:8px" autocomplete="off" autocorrect="off" autocapitalize="off">'+
+      '<button class="bp" id="howto-ask-btn" style="display:none;width:100%;margin-top:8px" onclick="askAboutPhoto()">Ask AI</button>'+
+      '<div id="howto-photo-answer" style="margin-top:8px"></div>'+
+    '</div>';
   document.getElementById("howto-sheet").style.display="flex";
 }
 function closeHowTo(){
@@ -735,19 +746,19 @@ function renderGuide(g){
   if(safety)html+='<div class="card" style="border-left:3px solid #dc3545;background:#fff5f5"><div class="ct" style="color:#dc3545">Safety</div><ul style="margin:0;padding-left:18px;font-size:13px">'+safety+'</ul></div>';
   if(steps)html+='<div class="card"><div class="ct">Steps</div>'+steps+'</div>';
   if(g.est_time)html+='<div style="font-size:11px;color:var(--faint);text-align:center">Est. time: '+esc(g.est_time)+'</div>';
-  document.getElementById("howto-body").innerHTML=html||'<div class="es">No guide content returned</div>';
+  document.getElementById("howto-guide-content").innerHTML=html||'<div class="es">No guide content returned</div>';
 }
 async function getGuide(){
   var jt=document.getElementById("howto-jobtype").value.trim();
   if(!jt){toast("Enter a job type first");return}
   if(!S.apiKey){toast("Add API key in Settings");return}
-  document.getElementById("howto-body").innerHTML='<div class="es">Checking for a saved guide...</div>';
+  document.getElementById("howto-guide-content").innerHTML='<div class="es">Checking for a saved guide...</div>';
   try{
     var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
     var cr=await fetch(SURL+"/rest/v1/fir_job_guides?select=*&job_type=eq."+encodeURIComponent(jt),{headers:h});
     var cached=await cr.json();
     if(cached&&cached.length){renderGuide(cached[0]);return}
-    document.getElementById("howto-body").innerHTML='<div class="es">Generating guide...</div>';
+    document.getElementById("howto-guide-content").innerHTML='<div class="es">Generating guide...</div>';
     var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:"You are an experienced home repair pro. Give a practical how-to guide for this job: \""+jt+"\". Return ONLY valid JSON, no markdown fences:\n{\"tools\":[\"item\"],\"materials\":[\"item\"],\"steps\":[\"step\"],\"safety_notes\":[\"note\"],\"est_time\":\"e.g. 1-2 hours\"}\n\nBe specific and concise. 5-10 steps typical."}]})});
     var d=await r.json();
     if(d.stop_reason==="max_tokens")throw new Error("Response was cut off \u2014 try a more specific job type");
@@ -756,7 +767,39 @@ async function getGuide(){
     renderGuide(g);
     await sbUp("fir_job_guides",{job_type:jt,tools:g.tools||[],materials:g.materials||[],steps:g.steps||[],safety_notes:g.safety_notes||[],est_time:g.est_time||""});
   }catch(e){
-    document.getElementById("howto-body").innerHTML='<div class="es">Error: '+esc(e.message)+'</div>';
+    document.getElementById("howto-guide-content").innerHTML='<div class="es">Error: '+esc(e.message)+'</div>';
+    console.error(e);
+  }
+}
+var howtoPhotoBase64=null;
+async function handleHowToPhoto(evt){
+  var file=evt.target.files[0];if(!file)return;evt.target.value="";
+  var img=new Image();img.src=URL.createObjectURL(file);
+  await new Promise(function(r){img.onload=r});
+  var canvas=document.createElement("canvas");
+  var scale=Math.min(1,1092/img.width);
+  canvas.width=img.width*scale;canvas.height=img.height*scale;
+  canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+  var dataUrl=canvas.toDataURL("image/jpeg",0.8);
+  howtoPhotoBase64=dataUrl.split(",")[1];
+  document.getElementById("howto-photo-preview").innerHTML='<img src="'+dataUrl+'" style="width:100%;border-radius:8px;margin-top:6px">';
+  document.getElementById("howto-ask-btn").style.display="";
+  document.getElementById("howto-photo-answer").innerHTML="";
+}
+async function askAboutPhoto(){
+  if(!howtoPhotoBase64){toast("Take a photo first");return}
+  if(!S.apiKey){toast("Add API key in Settings");return}
+  var q=document.getElementById("howto-question").value.trim()||"What do you see here, and is there anything I should be careful about?";
+  var jt=document.getElementById("howto-jobtype").value.trim();
+  document.getElementById("howto-photo-answer").innerHTML='<div class="es">Asking AI...</div>';
+  try{
+    var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:howtoPhotoBase64}},{type:"text",text:"You're an experienced home repair pro helping someone on a job"+(jt?(" ("+jt+")"):"")+". Look at the photo and answer their question briefly and practically: \""+q+"\""}]}]})});
+    var d=await r.json();
+    if(d.stop_reason==="max_tokens")throw new Error("Response was cut off");
+    var answer=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("");
+    document.getElementById("howto-photo-answer").innerHTML='<div class="card" style="margin:0;background:var(--bg)"><div style="font-size:13px;white-space:pre-wrap">'+esc(answer)+'</div></div>';
+  }catch(e){
+    document.getElementById("howto-photo-answer").innerHTML='<div class="es">Error: '+esc(e.message)+'</div>';
     console.error(e);
   }
 }
