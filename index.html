@@ -754,10 +754,11 @@ async function getGuide(){
   var jt=document.getElementById("howto-jobtype").value.trim();
   if(!jt){toast("Enter a job type first");return}
   if(!S.apiKey){toast("Add API key in Settings");return}
+  var jtKey=jt.toLowerCase().replace(/\s+/g," ");
   document.getElementById("howto-guide-content").innerHTML='<div class="es">Checking for a saved guide...</div>';
   try{
     var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
-    var cr=await fetch(SURL+"/rest/v1/fir_job_guides?select=*&job_type=eq."+encodeURIComponent(jt),{headers:h});
+    var cr=await fetch(SURL+"/rest/v1/fir_job_guides?select=*&job_type=eq."+encodeURIComponent(jtKey),{headers:h});
     var cached=await cr.json();
     if(cached&&cached.length){renderGuide(cached[0]);return}
     document.getElementById("howto-guide-content").innerHTML='<div class="es">Generating guide...</div>';
@@ -767,7 +768,7 @@ async function getGuide(){
     var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();
     var g=JSON.parse(raw);
     renderGuide(g);
-    await sbUp("fir_job_guides",{job_type:jt,tools:g.tools||[],materials:g.materials||[],steps:g.steps||[],safety_notes:g.safety_notes||[],est_time:g.est_time||""});
+    await sbUp("fir_job_guides",{job_type:jtKey,tools:g.tools||[],materials:g.materials||[],steps:g.steps||[],safety_notes:g.safety_notes||[],est_time:g.est_time||""});
   }catch(e){
     document.getElementById("howto-guide-content").innerHTML='<div class="es">Error: '+esc(e.message)+'</div>';
     console.error(e);
