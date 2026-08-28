@@ -116,6 +116,7 @@ textarea{resize:vertical;min-height:64px}
   <button class="nb" onclick="sv('exp')">Expenses</button>
   <button class="nb" onclick="sv('leads')">Leads</button>
   <button class="nb" onclick="sv('set')">Settings</button>
+  <button class="nb" onclick="openHowTo('')">How-To</button>
 </nav>
 <div id="v-db" class="view on">
   <div class="sg" id="dstats"></div>
@@ -215,6 +216,7 @@ textarea{resize:vertical;min-height:64px}
     <button class="bs2" id="btn-inp" style="display:none" onclick="markStat('in_progress')">In Progress</button>
     <button class="bs2" id="btn-comp" style="display:none" onclick="completeAndInvoice()">Complete &amp; Invoice</button>
     <button class="bs2" id="btn-inv" style="display:none" onclick="toInvoice()">To Invoice</button>
+    <button class="bs2" id="btn-howto" style="display:none" onclick="openHowTo(document.getElementById('fjc').value)">How to do this</button>
   </div>
 </div>
 <div id="v-inv" class="view"><div class="sh"><h2>Invoices</h2></div><div class="card"><input id="inv-search" placeholder="Search by name..." oninput="renderIL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="ilist"></div><div id="inv-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('inv')">Load older records</button></div></div></div>
@@ -711,6 +713,21 @@ function updBtns(s){
   inp.style.display=s==="scheduled"?"":"none";
   comp.style.display=(s==="scheduled"||s==="in_progress")?"":"none";
   inv.style.display=s==="complete"?"":"none";
+  var howto=document.getElementById("btn-howto");
+  if(howto)howto.style.display=(s==="scheduled"||s==="in_progress")?"":"none";
+}
+function openHowTo(jobType){
+  document.getElementById("howto-jobtype").value=jobType||"";
+  document.getElementById("howto-body").innerHTML='<div class="es">Tap "Get guide" to generate a how-to for this job.</div>';
+  document.getElementById("howto-sheet").style.display="flex";
+}
+function closeHowTo(){
+  document.getElementById("howto-sheet").style.display="none";
+}
+function getGuide(){
+  var jt=document.getElementById("howto-jobtype").value.trim();
+  if(!jt){toast("Enter a job type first");return}
+  document.getElementById("howto-body").innerHTML='<div class="es">(Guide generation not wired up yet \u2014 next step)</div>';
 }
 function renderPhotos(){document.getElementById("photostrip").innerHTML=photos.map(function(p,i){return"<div style=\"position:relative\"><img src=\""+p.url+"\" style=\"width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd\" onclick=\"window.open('"+p.url+"','_blank')\"><button style=\"position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;font-size:13px;line-height:1;border:none;border-radius:50%;background:#dc3545;color:#fff;cursor:pointer\" onclick=\"delPhoto("+i+")\">x</button></div>"}).join("")}
 function photoPathFromUrl(url){var marker="/storage/v1/object/public/fir-photos/";var idx=url.indexOf(marker);return idx>=0?url.slice(idx+marker.length):null}
@@ -1205,6 +1222,20 @@ function renderSched(){
   }).join(""):'<div class="es">No upcoming scheduled jobs</div>';
 }
 </script>
+
+<!-- How-To Sheet -->
+<div id="howto-sheet" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:1100;flex-direction:column">
+  <div style="background:var(--g);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="color:#fff;font-weight:700;font-size:15px">How to do this</div>
+    <button onclick="closeHowTo()" style="background:none;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0 6px">&times;</button>
+  </div>
+  <div style="padding:12px 16px;flex-shrink:0;border-bottom:1px solid var(--border)">
+    <label>Job type</label>
+    <input id="howto-jobtype" placeholder="e.g. garbage disposal replacement" autocomplete="off" autocorrect="off" autocapitalize="off">
+    <button class="bp" style="width:100%;margin-top:8px" onclick="getGuide()">Get guide</button>
+  </div>
+  <div id="howto-body" style="padding:12px 16px;overflow-y:auto;flex:1"></div>
+</div>
 
 <!-- Schedule Picker Modal -->
 <div id="sched-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
