@@ -719,6 +719,8 @@ function updBtns(s){
 function openHowTo(jobType){
   document.getElementById("howto-jobtype").value=jobType||"";
   howtoPhotoBase64=null;
+  howtoConvo=[];
+  howtoConvoDisplay=[];
   document.getElementById("howto-body").innerHTML=
     '<div id="howto-guide-content"><div class="es">Tap "Get guide" to generate a how-to for this job.</div></div>'+
     '<div class="card" style="margin-top:8px">'+
@@ -772,6 +774,8 @@ async function getGuide(){
   }
 }
 var howtoPhotoBase64=null;
+var howtoConvo=[];
+var howtoConvoDisplay=[];
 async function handleHowToPhoto(evt){
   var file=evt.target.files[0];if(!file)return;evt.target.value="";
   var img=new Image();img.src=URL.createObjectURL(file);
@@ -782,6 +786,8 @@ async function handleHowToPhoto(evt){
   canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
   var dataUrl=canvas.toDataURL("image/jpeg",0.8);
   howtoPhotoBase64=dataUrl.split(",")[1];
+  howtoConvo=[];
+  howtoConvoDisplay=[];
   document.getElementById("howto-photo-preview").innerHTML='<img src="'+dataUrl+'" style="width:100%;border-radius:8px;margin-top:6px">';
   document.getElementById("howto-ask-btn").style.display="";
   document.getElementById("howto-photo-answer").innerHTML="";
@@ -791,17 +797,38 @@ async function askAboutPhoto(){
   if(!S.apiKey){toast("Add API key in Settings");return}
   var q=document.getElementById("howto-question").value.trim()||"What do you see here, and is there anything I should be careful about?";
   var jt=document.getElementById("howto-jobtype").value.trim();
-  document.getElementById("howto-photo-answer").innerHTML='<div class="es">Asking AI...</div>';
+  document.getElementById("howto-question").value="";
+  if(howtoConvo.length===0){
+    howtoConvo.push({role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:howtoPhotoBase64}},{type:"text",text:"You're an experienced home repair pro helping someone on a job"+(jt?(" ("+jt+")"):"")+". Look at the photo and answer their questions briefly and practically. First question: \""+q+"\""}]});
+  }else{
+    howtoConvo.push({role:"user",content:q});
+  }
+  howtoConvoDisplay.push({q:q,a:null});
+  renderHowtoConvo(true);
   try{
-    var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:howtoPhotoBase64}},{type:"text",text:"You're an experienced home repair pro helping someone on a job"+(jt?(" ("+jt+")"):"")+". Look at the photo and answer their question briefly and practically: \""+q+"\""}]}]})});
+    var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,messages:howtoConvo})});
     var d=await r.json();
     if(d.stop_reason==="max_tokens")throw new Error("Response was cut off");
     var answer=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("");
-    document.getElementById("howto-photo-answer").innerHTML='<div class="card" style="margin:0;background:var(--bg)"><div style="font-size:13px;white-space:pre-wrap">'+esc(answer)+'</div></div>';
+    howtoConvo.push({role:"assistant",content:answer});
+    howtoConvoDisplay[howtoConvoDisplay.length-1].a=answer;
+    renderHowtoConvo(false);
   }catch(e){
-    document.getElementById("howto-photo-answer").innerHTML='<div class="es">Error: '+esc(e.message)+'</div>';
+    howtoConvo.pop();
+    howtoConvoDisplay.pop();
+    renderHowtoConvo(false);
+    toast("Error: "+e.message);
     console.error(e);
   }
+}
+function renderHowtoConvo(pending){
+  var html=howtoConvoDisplay.map(function(turn){
+    var h='<div style="font-size:12px;color:var(--muted);margin-top:10px"><b>You:</b> '+esc(turn.q)+'</div>';
+    if(turn.a)h+='<div class="card" style="margin:4px 0 0;background:var(--bg)"><div style="font-size:13px;white-space:pre-wrap">'+esc(turn.a)+'</div></div>';
+    return h;
+  }).join("");
+  if(pending)html+='<div class="es" style="margin-top:6px">Asking AI...</div>';
+  document.getElementById("howto-photo-answer").innerHTML=html;
 }
 function renderPhotos(){document.getElementById("photostrip").innerHTML=photos.map(function(p,i){return"<div style=\"position:relative\"><img src=\""+p.url+"\" style=\"width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd\" onclick=\"window.open('"+p.url+"','_blank')\"><button style=\"position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;font-size:13px;line-height:1;border:none;border-radius:50%;background:#dc3545;color:#fff;cursor:pointer\" onclick=\"delPhoto("+i+")\">x</button></div>"}).join("")}
 function photoPathFromUrl(url){var marker="/storage/v1/object/public/fir-photos/";var idx=url.indexOf(marker);return idx>=0?url.slice(idx+marker.length):null}
