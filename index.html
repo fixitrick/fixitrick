@@ -724,10 +724,41 @@ function openHowTo(jobType){
 function closeHowTo(){
   document.getElementById("howto-sheet").style.display="none";
 }
-function getGuide(){
+function renderGuide(g){
+  var tools=(g.tools||[]).map(function(t){return "<li>"+esc(t)+"</li>"}).join("");
+  var mats=(g.materials||[]).map(function(t){return "<li>"+esc(t)+"</li>"}).join("");
+  var steps=(g.steps||[]).map(function(s,i){return '<label style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)"><input type="checkbox" style="width:auto;margin-top:3px"><span style="font-size:13px">'+esc(s)+'</span></label>'}).join("");
+  var safety=(g.safety_notes||[]).map(function(s){return "<li>"+esc(s)+"</li>"}).join("");
+  var html='';
+  if(tools)html+='<div class="card"><div class="ct">Tools</div><ul style="margin:0;padding-left:18px;font-size:13px">'+tools+'</ul></div>';
+  if(mats)html+='<div class="card"><div class="ct">Materials</div><ul style="margin:0;padding-left:18px;font-size:13px">'+mats+'</ul></div>';
+  if(safety)html+='<div class="card" style="border-left:3px solid #dc3545;background:#fff5f5"><div class="ct" style="color:#dc3545">Safety</div><ul style="margin:0;padding-left:18px;font-size:13px">'+safety+'</ul></div>';
+  if(steps)html+='<div class="card"><div class="ct">Steps</div>'+steps+'</div>';
+  if(g.est_time)html+='<div style="font-size:11px;color:var(--faint);text-align:center">Est. time: '+esc(g.est_time)+'</div>';
+  document.getElementById("howto-body").innerHTML=html||'<div class="es">No guide content returned</div>';
+}
+async function getGuide(){
   var jt=document.getElementById("howto-jobtype").value.trim();
   if(!jt){toast("Enter a job type first");return}
-  document.getElementById("howto-body").innerHTML='<div class="es">(Guide generation not wired up yet \u2014 next step)</div>';
+  if(!S.apiKey){toast("Add API key in Settings");return}
+  document.getElementById("howto-body").innerHTML='<div class="es">Checking for a saved guide...</div>';
+  try{
+    var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
+    var cr=await fetch(SURL+"/rest/v1/fir_job_guides?select=*&job_type=eq."+encodeURIComponent(jt),{headers:h});
+    var cached=await cr.json();
+    if(cached&&cached.length){renderGuide(cached[0]);return}
+    document.getElementById("howto-body").innerHTML='<div class="es">Generating guide...</div>';
+    var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:"You are an experienced home repair pro. Give a practical how-to guide for this job: \""+jt+"\". Return ONLY valid JSON, no markdown fences:\n{\"tools\":[\"item\"],\"materials\":[\"item\"],\"steps\":[\"step\"],\"safety_notes\":[\"note\"],\"est_time\":\"e.g. 1-2 hours\"}\n\nBe specific and concise. 5-10 steps typical."}]})});
+    var d=await r.json();
+    if(d.stop_reason==="max_tokens")throw new Error("Response was cut off \u2014 try a more specific job type");
+    var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();
+    var g=JSON.parse(raw);
+    renderGuide(g);
+    await sbUp("fir_job_guides",{job_type:jt,tools:g.tools||[],materials:g.materials||[],steps:g.steps||[],safety_notes:g.safety_notes||[],est_time:g.est_time||""});
+  }catch(e){
+    document.getElementById("howto-body").innerHTML='<div class="es">Error: '+esc(e.message)+'</div>';
+    console.error(e);
+  }
 }
 function renderPhotos(){document.getElementById("photostrip").innerHTML=photos.map(function(p,i){return"<div style=\"position:relative\"><img src=\""+p.url+"\" style=\"width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd\" onclick=\"window.open('"+p.url+"','_blank')\"><button style=\"position:absolute;top:-7px;right:-7px;width:20px;height:20px;padding:0;font-size:13px;line-height:1;border:none;border-radius:50%;background:#dc3545;color:#fff;cursor:pointer\" onclick=\"delPhoto("+i+")\">x</button></div>"}).join("")}
 function photoPathFromUrl(url){var marker="/storage/v1/object/public/fir-photos/";var idx=url.indexOf(marker);return idx>=0?url.slice(idx+marker.length):null}
