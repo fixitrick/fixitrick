@@ -162,7 +162,7 @@ textarea{resize:vertical;min-height:64px}
   <div id="rpt-body"></div>
 </div>
 <div id="v-est" class="view"><div class="sh"><h2>Estimates</h2><button class="bp" onclick="openEF(null)">+ New</button></div><div class="card"><input id="est-search" placeholder="Search by name..." oninput="renderEL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="elist"></div><div id="est-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('est')">Load older records</button></div></div></div>
-<div id="v-sched" class="view"><div class="sh"><h2>Schedule</h2></div><div class="card"><div id="schedlist"></div></div></div>
+<div id="v-sched" class="view"><div class="sh"><h2>Schedule</h2><button class="bs2" onclick="openPersonalEventModal()">+ Personal Event</button></div><div class="card"><div id="schedlist"></div></div></div>
 <div id="v-ef" class="view">
   <div class="sh"><h2 id="eftitle">New Estimate</h2><button class="bs2" onclick="sv('est')">Back</button></div>
   <div class="card"><div class="ct">Customer</div>
@@ -383,7 +383,7 @@ function logout(){
 document.getElementById("login-pw").addEventListener("keydown",function(ev){if(ev.key==="Enter")doLogin();});
 document.getElementById("app").style.display="none";
 var EMAIL_FN_URL = SURL + "/functions/v1/send-document";
-var ests=[],invs=[],clients=[],exps=[],leads=[],mats=[],labs=[],photos=[],pendingPhotoDeletes=[];
+var ests=[],invs=[],clients=[],exps=[],leads=[],mats=[],labs=[],photos=[],pendingPhotoDeletes=[],personalEvents=[];
 var estAllLoaded=false,invAllLoaded=false,leadAllLoaded=false,expAllLoaded=false;
 
 // Supabase helpers
@@ -454,7 +454,7 @@ var S={biz:"FixItRick Home Repair Services",phone:"614-966-2311",email:"rickh@fi
 function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}else{localStorage.setItem(k,JSON.stringify(v))}}
 // Row mappers
 function e2db(e){return{id:e.id,est_num:e.estNum||"",customer:e.customer||"",phone:e.phone||"",email:e.email||"",address:e.address||"",cat:e.cat||"",description:e.desc||"",notes:e.notes||"",markup_pct:e.markupPct||0,tax_pct:e.taxPct||0,discount:e.discount||0,deposit:e.deposit||0,total:e.total||0,balance:e.balance||0,status:e.status||"draft",lead_id:e.leadId||null,mats:e.mats||[],labs:e.labs||[],photos:e.photos||[],created_at:e.created||Date.now(),updated_at:Date.now(),emailed_at:e.emailedAt||null,emailed_to:e.emailedTo||null,zoho_sync_ok:e.zohoSyncOk!==false};}
-function db2e(r){return{id:r.id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,cat:r.cat,desc:r.description,notes:r.notes,markupPct:+r.markup_pct,taxPct:+r.tax_pct,discount:+r.discount,deposit:+r.deposit,total:+r.total,balance:+r.balance,status:r.status,leadId:r.lead_id||null,mats:r.mats||[],labs:r.labs||[],photos:r.photos||[],schedDate:r.sched_date||null,emailedAt:r.emailed_at||null,emailedTo:r.emailed_to||null,zohoSyncOk:r.zoho_sync_ok!==false,created:r.created_at};}
+function db2e(r){return{id:r.id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,cat:r.cat,desc:r.description,notes:r.notes,markupPct:+r.markup_pct,taxPct:+r.tax_pct,discount:+r.discount,deposit:+r.deposit,total:+r.total,balance:+r.balance,status:r.status,leadId:r.lead_id||null,mats:r.mats||[],labs:r.labs||[],photos:r.photos||[],schedDate:r.sched_date||null,schedDurationMin:r.sched_duration_min||60,emailedAt:r.emailed_at||null,emailedTo:r.emailed_to||null,zohoSyncOk:r.zoho_sync_ok!==false,created:r.created_at};}
 function i2db(i){return{id:i.id,inv_num:i.invNum||"",est_id:i.estId||"",est_num:i.estNum||"",customer:i.customer||"",phone:i.phone||"",email:i.email||"",address:i.address||"",total:i.total||0,balance:i.balance||0,deposit:i.deposit||0,notes:i.notes||"",mats:i.mats||[],labs:i.labs||[],photos:i.photos||[],paid:i.paid||false,paid_at:i.paidAt||null,due_date:i.dueDate||0,created_at:i.created||Date.now(),emailed_at:i.emailedAt||null,emailed_to:i.emailedTo||null};}
 function db2i(r){return{id:r.id,invNum:r.inv_num,estId:r.est_id,estNum:r.est_num,customer:r.customer,phone:r.phone,email:r.email,address:r.address,total:+r.total,balance:+r.balance,deposit:+r.deposit,notes:r.notes,mats:r.mats||[],labs:r.labs||[],photos:r.photos||[],paid:r.paid,paidAt:r.paid_at||null,dueDate:r.due_date,emailedAt:r.emailed_at||null,emailedTo:r.emailed_to||null,created:r.created_at};}
 function c2db(c){return{id:c.id,name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",notes:c.notes||"",created_at:c.created||Date.now()};}
@@ -464,6 +464,8 @@ function l2db(l){return{id:l.id,name:l.name||"",phone:l.phone||"",email:l.email|
 function db2l(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,source:r.source,jobDesc:r.job_desc,status:r.status||"new",created:r.created_at};}
 function x2db(e){return{id:e.id,date:e.date||"",amount:e.amount||0,category:e.cat||"",description:e.desc||"",created_at:e.created||Date.now()};}
 function db2x(r){return{id:r.id,date:r.date,amount:+r.amount,cat:r.category,desc:r.description,created:r.created_at};}
+function pe2db(p){return{id:p.id,title:p.title||"",event_date:p.eventDate,duration_min:p.durationMin||60,created_at:p.created||Date.now(),zoho_sync_ok:p.zohoSyncOk!==false};}
+function db2pe(r){return{id:r.id,title:r.title,eventDate:+r.event_date,durationMin:r.duration_min||60,created:r.created_at,zohoSyncOk:r.zoho_sync_ok!==false};}
 
 function normPhone(p){return String(p||"").replace(/\D/g,"");}
 function findClientMatch(phone,email,name){
@@ -501,12 +503,14 @@ async function load(){
     var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var rp=await fetch(SURL+"/rest/v1/fir_personal_events?select=*&order=event_date.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rs=await fetch(SURL+"/rest/v1/fir_settings?id=eq.main",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     ests=(await re.json()).map(db2e);
     invs=(await ri.json()).map(db2i);
     clients=(await rc.json()).map(db2c);
     exps=(await rx.json()).map(db2x);
     try{leads=(await rl.json()).map(db2l);}catch(e){leads=[]}
+    try{personalEvents=(await rp.json()).map(db2pe);}catch(e){personalEvents=[]}
     var sd=await rs.json();
     if(sd&&sd[0]&&sd[0].data){S=Object.assign(S,sd[0].data);}
     S.apiKey=ak||"";
@@ -1233,36 +1237,76 @@ function openSchedPicker(){
   var today=new Date();
   var dd=String(today.getDate()).padStart(2,"0");
   var mm=String(today.getMonth()+1).padStart(2,"0");
-  document.getElementById("sched-date").value=today.getFullYear()+"-"+mm+"-"+dd;
-  document.getElementById("sched-time").value="08:00";
+  var existing=null;
+  for(var i=0;i<ests.length;i++){if(ests[i].id===id){existing=ests[i];break}}
+  document.getElementById("sched-date").value=existing&&existing.schedDate?new Date(existing.schedDate).toLocaleDateString("en-CA"):today.getFullYear()+"-"+mm+"-"+dd;
+  document.getElementById("sched-time").value=existing&&existing.schedDate?new Date(existing.schedDate).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"08:00";
+  document.getElementById("sched-duration").value=(existing&&existing.schedDurationMin)||60;
   var m=document.getElementById("sched-modal");
   m.style.display="flex";
   updateSchedContext();
 }
+function sameDayCalendarItems(dt,excludeEstId){
+  var sameDayJobs=ests.filter(function(e){
+    if(e.id===excludeEstId||!e.schedDate)return false;
+    if(e.status!=="scheduled"&&e.status!=="in_progress")return false;
+    return new Date(e.schedDate).toLocaleDateString("en-CA")===dt;
+  });
+  var sameDayPe=personalEvents.filter(function(p){
+    return p.eventDate&&new Date(p.eventDate).toLocaleDateString("en-CA")===dt;
+  });
+  return sameDayJobs.map(function(e){return{ts:e.schedDate,durationMin:e.schedDurationMin||60,label:esc(e.customer||"")};})
+    .concat(sameDayPe.map(function(p){return{ts:p.eventDate,durationMin:p.durationMin||60,label:esc(p.title||"Personal")+" (personal)"};}))
+    .sort(function(a,b){return a.ts-b.ts;});
+}
+function rangesOverlap(startA,durA,startB,durB){
+  var endA=startA+durA*60000,endB=startB+durB*60000;
+  return startA<endB&&startB<endA;
+}
+function renderCalendarContext(dt,candTs,candDur,items){
+  if(!items.length)return '<div style="color:#28a745;font-weight:600;margin-bottom:4px">✓ Nothing else on the calendar this day</div>';
+  var overlapping=[],other=[];
+  items.forEach(function(i){
+    (candTs&&rangesOverlap(candTs,candDur,i.ts,i.durationMin)?overlapping:other).push(i);
+  });
+  var html="";
+  if(overlapping.length){
+    html+='<div style="font-weight:700;color:#dc3545;margin-bottom:4px">⚠ Overlaps with:</div>';
+    html+=overlapping.map(function(i){
+      return '<div style="padding:2px 0">'+fmtRange(i.ts,i.durationMin)+" \u2014 "+i.label+"</div>";
+    }).join("");
+  }
+  if(other.length){
+    html+='<div style="font-weight:700;color:var(--muted);margin-top:'+(overlapping.length?"6px":"0")+';margin-bottom:2px">Also on the calendar this day:</div>';
+    html+=other.map(function(i){
+      return '<div style="padding:2px 0;color:var(--muted)">'+fmtRange(i.ts,i.durationMin)+" \u2014 "+i.label+"</div>";
+    }).join("");
+  }
+  if(!overlapping.length&&!other.length)html='<div style="color:#28a745;font-weight:600;margin-bottom:4px">✓ Nothing else on the calendar this day</div>';
+  return html;
+}
+function fmtRange(ts,durationMin){
+  var start=new Date(ts),end=new Date(ts+durationMin*60000);
+  return start.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+"\u2013"+end.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+}
+function setDuration(prefix,mins){
+  document.getElementById(prefix+"-duration").value=mins;
+  if(prefix==="sched")updateSchedContext();else updatePeContext();
+}
 function updateSchedContext(){
   var id=document.getElementById("feid").value;
   var dt=document.getElementById("sched-date").value;
+  var tm=document.getElementById("sched-time").value;
+  var dur=parseInt(document.getElementById("sched-duration").value,10)||60;
   var box=document.getElementById("sched-context");
   if(!box)return;
   if(!dt){box.innerHTML="";return}
-  var sameDay=ests.filter(function(e){
-    if(e.id===id||!e.schedDate)return false;
-    if(e.status!=="scheduled"&&e.status!=="in_progress")return false;
-    var eDate=new Date(e.schedDate).toLocaleDateString("en-CA");
-    return eDate===dt;
-  }).sort(function(a,b){return a.schedDate-b.schedDate;});
+  var sameDay=sameDayCalendarItems(dt,id);
+  var candTs=tm?new Date(dt+"T"+tm).getTime():null;
   var upcoming=ests.filter(function(e){
     return e.id!==id&&e.schedDate&&(e.status==="scheduled"||e.status==="in_progress")&&e.schedDate>=Date.now();
   }).sort(function(a,b){return a.schedDate-b.schedDate;}).slice(0,4);
-  var html="";
-  if(sameDay.length){
-    html+='<div style="font-weight:700;color:#b8860b;margin-bottom:4px">⚠ Already booked this day:</div>';
-    html+=sameDay.map(function(e){
-      return '<div style="padding:2px 0">'+new Date(e.schedDate).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+" \u2014 "+esc(e.customer||"")+"</div>";
-    }).join("");
-  }else{
-    html+='<div style="color:#28a745;font-weight:600;margin-bottom:4px">✓ Nothing else booked this day</div>';
-  }
+  var html=renderCalendarContext(dt,candTs,dur,sameDay);
   if(upcoming.length){
     html+='<div style="font-weight:700;color:var(--muted);margin-top:6px;margin-bottom:2px">Next up overall:</div>';
     html+=upcoming.map(function(e){
@@ -1274,11 +1318,80 @@ function updateSchedContext(){
 function closeSchedPicker(){
   document.getElementById("sched-modal").style.display="none";
 }
+function openPersonalEventModal(){
+  document.getElementById("pe-title").value="";
+  document.getElementById("pe-date").value="";
+  document.getElementById("pe-time").value="";
+  document.getElementById("pe-duration").value=60;
+  document.getElementById("pe-context").innerHTML="";
+  document.getElementById("pe-modal").style.display="flex";
+}
+function closePersonalEventModal(){
+  document.getElementById("pe-modal").style.display="none";
+}
+function updatePeContext(){
+  var dt=document.getElementById("pe-date").value;
+  var tm=document.getElementById("pe-time").value;
+  var dur=parseInt(document.getElementById("pe-duration").value,10)||60;
+  var box=document.getElementById("pe-context");
+  if(!box)return;
+  if(!dt){box.innerHTML="";return}
+  var items=sameDayCalendarItems(dt,null);
+  var candTs=tm?new Date(dt+"T"+tm).getTime():null;
+  box.innerHTML=renderCalendarContext(dt,candTs,dur,items);
+}
+async function savePersonalEvent(){
+  var title=document.getElementById("pe-title").value.trim();
+  var dt=document.getElementById("pe-date").value;
+  var tm=document.getElementById("pe-time").value;
+  var dur=parseInt(document.getElementById("pe-duration").value,10)||60;
+  if(!title){toast("Title required");return}
+  if(!dt){toast("Pick a date");return}
+  var eventTs=new Date(dt+"T"+(tm||"08:00")).getTime();
+  var p={id:uid(),title:title,eventDate:eventTs,durationMin:dur,created:Date.now(),zohoSyncOk:true};
+  var zohoOk=true;
+  try{
+    var zr=await fetch(SURL+"/functions/v1/zoho-personal-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({personalEventId:p.id,title:p.title,eventDate:p.eventDate,durationMin:dur})});
+    var zj=await zr.json();
+    if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
+  }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
+  p.zohoSyncOk=zohoOk;
+  personalEvents.push(p);
+  await qUp("fir_personal_events",pe2db(p));
+  persistLocal();
+  closePersonalEventModal();
+  renderSched();
+  toast(zohoOk?("Added "+title):(title+" added, but calendar sync failed"));
+}
+async function deletePersonalEvent(id){
+  if(!confirm("Delete this personal event?"))return;
+  personalEvents=personalEvents.filter(function(p){return p.id!==id});
+  await qDel("fir_personal_events",id);
+  persistLocal();
+  renderSched();
+  toast("Deleted");
+}
+async function retryPersonalEventSync(id){
+  var p=null;
+  for(var i=0;i<personalEvents.length;i++){if(personalEvents[i].id===id){p=personalEvents[i];break}}
+  if(!p)return;
+  var ok=true;
+  try{
+    var zr=await fetch(SURL+"/functions/v1/zoho-personal-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({personalEventId:p.id,title:p.title,eventDate:p.eventDate,durationMin:p.durationMin||60})});
+    var zj=await zr.json();
+    if(!zj.ok)ok=false;
+  }catch(e){ok=false;}
+  p.zohoSyncOk=ok;
+  await qUp("fir_personal_events",pe2db(p));
+  renderSched();
+  toast(ok?"Calendar sync fixed":"Still failing to sync");
+}
 async function confirmSched(){
   var id=document.getElementById("feid").value;
   if(!id)return;
   var dt=document.getElementById("sched-date").value;
   var tm=document.getElementById("sched-time").value;
+  var dur=parseInt(document.getElementById("sched-duration").value,10)||60;
   if(!dt){toast("Pick a date");return}
   var schedTs=new Date(dt+"T"+(tm||"08:00")).getTime();
   var zohoOk=true;
@@ -1286,10 +1399,11 @@ async function confirmSched(){
     if(ests[i].id===id){
       ests[i].status="scheduled";
       ests[i].schedDate=schedTs;
-      await qUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs}));
+      ests[i].schedDurationMin=dur;
+      await qUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs,sched_duration_min:dur}));
       persistLocal();
       try{
-        var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
+        var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id,durationMin:dur})});
         var zj=await zr.json();
         if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
       }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
@@ -1321,8 +1435,10 @@ async function retryZohoSync(id){
   if(!id)return;
   toast("Retrying calendar sync...");
   var ok=true;
+  var estForRetry=null;
+  for(var j=0;j<ests.length;j++){if(ests[j].id===id){estForRetry=ests[j];break}}
   try{
-    var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id})});
+    var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id,durationMin:(estForRetry&&estForRetry.schedDurationMin)||60})});
     var zj=await zr.json();
     if(!zj.ok){console.error("Zoho retry failed:",zj.error);ok=false;}
   }catch(e){console.error("Zoho retry error:",e);ok=false;}
@@ -1338,15 +1454,25 @@ async function retryZohoSync(id){
   if(document.getElementById("v-sched").classList.contains("on"))renderSched();
 }
 function renderSched(){
-  var list=ests.filter(function(e){return e.schedDate&&(e.status==="scheduled"||e.status==="in_progress");}).sort(function(a,b){return a.schedDate-b.schedDate;});
-  document.getElementById("schedlist").innerHTML=list.length?list.map(function(e){
+  var jobRows=ests.filter(function(e){return e.schedDate&&(e.status==="scheduled"||e.status==="in_progress");}).map(function(e){
     var d=new Date(e.schedDate);
     var dayLabel=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
-    var timeLabel=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+    var timeLabel=fmtRange(e.schedDate,e.schedDurationMin||60);
     var overdue=e.schedDate<Date.now()&&e.status==="scheduled";
     var syncBadge=e.zohoSyncOk===false?'<span style="color:#b8860b;font-weight:700;font-size:11px">⚠ sync failed</span> <button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();retryZohoSync(\''+e.id+'\')">Retry</button>':'<span style="color:#28a745;font-size:11px">✓ synced</span>';
-    return '<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+esc(e.address):"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge '+e.status+'">'+e.status+"</span></div></div>";
-  }).join(""):'<div class="es">No upcoming scheduled jobs</div>';
+    var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+esc(e.address):"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge '+e.status+'">'+e.status+"</span></div></div>";
+    return{ts:e.schedDate,html:html};
+  });
+  var peRows=personalEvents.map(function(p){
+    var d=new Date(p.eventDate);
+    var dayLabel=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
+    var timeLabel=fmtRange(p.eventDate,p.durationMin||60);
+    var syncBadge=p.zohoSyncOk===false?'<span style="color:#b8860b;font-weight:700;font-size:11px">⚠ sync failed</span> <button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();retryPersonalEventSync(\''+p.id+'\')">Retry</button>':'<span style="color:#28a745;font-size:11px">✓ synced</span>';
+    var html='<div class="li" style="flex-wrap:wrap;gap:6px;border-left:3px solid #6f42c1"><div style="flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+'</div><div class="lim">'+esc(p.title||"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge" style="background:#6f42c1;color:#fff">personal</span><button class="bs2" style="padding:2px 8px;font-size:11px" onclick="deletePersonalEvent(\''+p.id+'\')">Delete</button></div></div>';
+    return{ts:p.eventDate,html:html};
+  });
+  var list=jobRows.concat(peRows).sort(function(a,b){return a.ts-b.ts;});
+  document.getElementById("schedlist").innerHTML=list.length?list.map(function(r){return r.html;}).join(""):'<div class="es">No upcoming scheduled jobs</div>';
 }
 </script>
 
@@ -1369,11 +1495,48 @@ function renderSched(){
   <div style="background:var(--card);border-radius:16px;padding:1.4rem;width:92%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
     <div style="font-size:15px;font-weight:700;margin-bottom:1rem;color:var(--text)">Schedule This Job</div>
     <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Date</label><input type="date" id="sched-date" oninput="updateSchedContext()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
-    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Time</label><input type="time" id="sched-time" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Time</label><input type="time" id="sched-time" oninput="updateSchedContext()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Duration</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('sched',30)">30m</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('sched',60)">1h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('sched',90)">1.5h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('sched',120)">2h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('sched',240)">Half day</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('sched',480)">Full day</button>
+      </div>
+      <input type="number" id="sched-duration" min="5" step="5" value="60" oninput="updateSchedContext()" placeholder="Custom minutes" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
     <div id="sched-context" style="margin-bottom:1.1rem;font-size:12px;background:var(--bg);border-radius:8px;padding:8px 10px;max-height:120px;overflow-y:auto"></div>
     <div style="display:flex;gap:8px">
       <button class="bp" style="flex:1" onclick="confirmSched()">Confirm</button>
       <button class="bs2" style="flex:1" onclick="closeSchedPicker()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Personal Event Modal -->
+<div id="pe-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:16px;padding:1.4rem;width:92%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+    <div style="font-size:15px;font-weight:700;margin-bottom:1rem;color:var(--text)">Personal Event</div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Title</label><input type="text" id="pe-title" placeholder="e.g. Dentist appointment" autocomplete="off" autocorrect="off" autocapitalize="off" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Date</label><input type="date" id="pe-date" oninput="updatePeContext()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Time</label><input type="time" id="pe-time" oninput="updatePeContext()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Duration</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',30)">30m</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',60)">1h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',90)">1.5h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',120)">2h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',240)">Half day</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',480)">Full day</button>
+      </div>
+      <input type="number" id="pe-duration" min="5" step="5" value="60" oninput="updatePeContext()" placeholder="Custom minutes" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
+    <div id="pe-context" style="margin-bottom:1.1rem;font-size:12px;background:var(--bg);border-radius:8px;padding:8px 10px;max-height:120px;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px">
+      <button class="bp" style="flex:1" onclick="savePersonalEvent()">Save</button>
+      <button class="bs2" style="flex:1" onclick="closePersonalEventModal()">Cancel</button>
     </div>
   </div>
 </div>
