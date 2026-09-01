@@ -1092,13 +1092,28 @@ function buildPrint(d,type,docNum,footer){
   var discount=+(d.discount)||0;
 
   return '<!DOCTYPE html><html><head><title>'+docNum+'</title>'+
-  '<meta name="viewport" content="width=device-width">'+
+  '<meta name="viewport" content="width=device-width, initial-scale=1">'+
   '<style>'+
   '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.no-print{display:none!important}}'+
   'body{font-family:Arial,sans-serif;max-width:720px;margin:0 auto;color:#222;font-size:14px;padding:20px}'+
   '.no-print{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px}'+
   '.no-print button{padding:9px 18px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}'+
   '.btn-print{background:#283010;color:#c8a048}.btn-close{background:#f0f0f0;color:#333}'+
+  '.doc-header{background:#283010;padding:16px 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin-bottom:0;border-radius:8px 8px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+  '.doc-header-left{display:flex;flex-direction:column;justify-content:center;min-width:0}'+
+  '.doc-header-right{text-align:right;min-width:0}'+
+  '.doc-brand{color:#fff;font-size:26px;font-weight:900;letter-spacing:1px;font-family:Arial Black,Arial,sans-serif;white-space:nowrap}'+
+  '.doc-tagline{color:#c8a048;font-size:11px;letter-spacing:2px;font-weight:600;margin-top:3px;font-family:Arial,sans-serif;white-space:nowrap}'+
+  '.doc-legal{color:rgba(255,255,255,0.6);font-size:9px;margin-top:2px;font-family:Arial,sans-serif}'+
+  '.doc-type{color:#c8a048;font-size:28px;font-weight:900;letter-spacing:4px;white-space:nowrap}'+
+  '.doc-contact{color:#fff;font-size:11px;margin-top:3px}'+
+  '@media (max-width:420px){'+
+  '.doc-header{padding:14px 16px}'+
+  '.doc-brand{font-size:20px;letter-spacing:.5px}'+
+  '.doc-tagline{font-size:9px;letter-spacing:1px}'+
+  '.doc-type{font-size:19px;letter-spacing:1.5px}'+
+  '.doc-contact{font-size:10px}'+
+  '}'+
   '</style></head><body>'+
   '<div class="no-print">'+
   '<button class="btn-close" onclick="window.close()">← Back to App</button>'+
@@ -1106,15 +1121,15 @@ function buildPrint(d,type,docNum,footer){
   '</div>'+
 
   // HEADER - full width green bar with logo left, doc type right
-  '<div style="background:#283010;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0;border-radius:8px 8px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+
-  '<div style="display:flex;flex-direction:column;justify-content:center">'+
-  '<div style="color:#fff;font-size:26px;font-weight:900;letter-spacing:1px;font-family:Arial Black,Arial,sans-serif">FixItRick</div>'+
-  '<div style="color:#c8a048;font-size:11px;letter-spacing:2px;font-weight:600;margin-top:3px;font-family:Arial,sans-serif">HOME REPAIR SERVICES</div>'+
-  '<div style="color:rgba(255,255,255,0.6);font-size:9px;margin-top:2px;font-family:Arial,sans-serif">Homman Ventures LLC, dba FixItRick</div>'+
+  '<div class="doc-header">'+
+  '<div class="doc-header-left">'+
+  '<div class="doc-brand">FixItRick</div>'+
+  '<div class="doc-tagline">HOME REPAIR SERVICES</div>'+
+  '<div class="doc-legal">Homman Ventures LLC, dba FixItRick</div>'+
   '</div>'+
-  '<div style="text-align:right">'+
-  '<div style="color:#c8a048;font-size:28px;font-weight:900;letter-spacing:4px">'+type+'</div>'+
-  '<div style="color:#fff;font-size:11px;margin-top:3px">'+S.phone+' · '+S.email+(S.web?' · '+S.web:'')+'</div>'+
+  '<div class="doc-header-right">'+
+  '<div class="doc-type">'+type+'</div>'+
+  '<div class="doc-contact">'+S.phone+' · '+S.email+(S.web?' · '+S.web:'')+'</div>'+
   '</div></div>'+
 
   // GOLD ACCENT BAR
