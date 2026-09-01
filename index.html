@@ -224,7 +224,7 @@ textarea{resize:vertical;min-height:64px}
   <div class="sh"><h2>Clients</h2><button class="bp" onclick="toggleCF()">+ Add</button></div>
   <div class="card" id="cform" style="display:none"><div class="ct" id="cform-title">New Client</div>
     <input type="hidden" id="clid" autocomplete="off" autocorrect="off" autocapitalize="off">
-    <div class="r2"><div class="mb"><label>Name</label><input id="cln" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><input id="clp" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r2"><div class="mb"><label>Name</label><input id="cln" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><div style="display:flex;gap:6px"><input id="clp" autocomplete="off" autocorrect="off" autocapitalize="off" style="flex:1"><button type="button" class="bs2" style="padding:0 12px" onclick="callFieldValue('clp')" title="Call">📞</button></div></div></div>
     <div class="r2"><div class="mb"><label>Email</label><input id="cle" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Address</label><input id="cla" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
     <div class="mb"><label>Notes</label><textarea id="clnotes" placeholder="Gate code, dog in yard, preferred contact method, etc." style="min-height:56px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveClient()">Save</button><button class="bs2" onclick="toggleCF()">Cancel</button></div>
@@ -246,7 +246,7 @@ textarea{resize:vertical;min-height:64px}
   <div class="sh"><h2>Leads</h2><div style="display:flex;gap:8px"><button class="bp" style="background:var(--bg);color:var(--g);border:1px solid #ddd" onclick="refreshLeads()" id="leadRefreshBtn">⟳ Refresh</button><button class="bp" onclick="toggleLF()">+ Add Lead</button></div></div>
   <div class="card" id="lform" style="display:none"><div class="ct" id="lform-title">New Lead</div>
     <input type="hidden" id="llid" autocomplete="off" autocorrect="off" autocapitalize="off">
-    <div class="r2"><div class="mb"><label>Name</label><input id="lln" placeholder="Jane Smith" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><input id="llp" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r2"><div class="mb"><label>Name</label><input id="lln" placeholder="Jane Smith" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><div style="display:flex;gap:6px"><input id="llp" autocomplete="off" autocorrect="off" autocapitalize="off" style="flex:1"><button type="button" class="bs2" style="padding:0 12px" onclick="callFieldValue('llp')" title="Call">📞</button></div></div></div>
     <div class="r2"><div class="mb"><label>Email</label><input id="lle" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Source</label><select id="lls"><option>Website</option><option>Referral</option><option>Phone Call</option><option>Text</option><option>Neighbor</option><option>Other</option></select></div></div>
     <div class="mb"><label>Address</label><input id="lla" placeholder="123 Main St, Dublin, OH" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
     <div class="mb"><label>Job Description</label><textarea id="llj" placeholder="What do they need done?" style="min-height:56px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
@@ -474,6 +474,7 @@ function db2pe(r){return{id:r.id,title:r.title,eventDate:+r.event_date,durationM
 
 function normPhone(p){return String(p||"").replace(/\D/g,"");}
 function telLink(phone){if(!phone)return"";var digits=normPhone(phone);if(!digits)return esc(phone);return '<a href="tel:'+digits+'" onclick="event.stopPropagation()" style="color:inherit;text-decoration:underline">'+esc(phone)+'</a>';}
+function callFieldValue(fieldId){var el=document.getElementById(fieldId);var digits=normPhone(el?el.value:"");if(!digits){toast("No phone number entered");return}window.location.href="tel:"+digits;}
 function findClientMatch(phone,email,name){
   var np=normPhone(phone),ne=(email||"").toLowerCase().trim(),nn=(name||"").toLowerCase().trim();
   for(var i=0;i<clients.length;i++){
