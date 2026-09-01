@@ -1349,6 +1349,9 @@ async function savePersonalEvent(){
   if(!dt){toast("Pick a date");return}
   var eventTs=new Date(dt+"T"+(tm||"08:00")).getTime();
   var p={id:uid(),title:title,eventDate:eventTs,durationMin:dur,created:Date.now(),zohoSyncOk:true};
+  personalEvents.push(p);
+  await qUp("fir_personal_events",pe2db(p));
+  persistLocal();
   var zohoOk=true;
   try{
     var zr=await fetch(SURL+"/functions/v1/zoho-personal-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({personalEventId:p.id,title:p.title,eventDate:p.eventDate,durationMin:dur})});
@@ -1356,9 +1359,7 @@ async function savePersonalEvent(){
     if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
   }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
   p.zohoSyncOk=zohoOk;
-  personalEvents.push(p);
-  await qUp("fir_personal_events",pe2db(p));
-  persistLocal();
+  try{await sbUp("fir_personal_events",Object.assign(pe2db(p),{zoho_sync_ok:zohoOk}));}catch(e){}
   closePersonalEventModal();
   renderSched();
   toast(zohoOk?("Added "+title):(title+" added, but calendar sync failed"));
