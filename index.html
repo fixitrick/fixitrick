@@ -1635,7 +1635,8 @@ function renderSched(){
     var timeLabel=fmtRange(e.schedDate,e.schedDurationMin||60);
     var overdue=e.schedDate<Date.now()&&e.status==="scheduled";
     var syncBadge=e.zohoSyncOk===false?'<span style="color:#b8860b;font-weight:700;font-size:11px">⚠ sync failed</span> <button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();retryZohoSync(\''+e.id+'\')">Retry</button>':'<span style="color:#28a745;font-size:11px">✓ synced</span>';
-    var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+esc(e.address):"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge '+e.status+'">'+e.status+"</span></div></div>";
+    var jobInfo=(e.cat||e.desc)?('<div class="lim">'+(e.cat?esc(e.cat):"")+(e.cat&&e.desc?" · ":"")+(e.desc?esc(e.desc.slice(0,80))+(e.desc.length>80?"...":""):"")+'</div>'):"";
+    var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+esc(e.address):"")+'</div>'+jobInfo+'</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge '+e.status+'">'+e.status+"</span></div></div>";
     return{ts:e.schedDate,html:html};
   });
   var peRows=personalEvents.map(function(p){
