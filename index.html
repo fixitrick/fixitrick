@@ -491,12 +491,19 @@ function findClientMatch(phone,email,name){
 }
 async function findOrCreateClient(d){
   var match=findClientMatch(d.phone,d.email,d.customer);
-  if(match)return match;
-  var carriedNotes="";
+  var leadNotes="";
   if(d.leadId){
-    for(var i=0;i<leads.length;i++){if(leads[i].id===d.leadId){carriedNotes=leads[i].notes||"";break}}
+    for(var i=0;i<leads.length;i++){if(leads[i].id===d.leadId){leadNotes=leads[i].notes||"";break}}
   }
-  var nc={id:uid(),name:d.customer||"",phone:d.phone||"",email:d.email||"",address:d.address||"",notes:carriedNotes,created:Date.now()};
+  if(match){
+    if(leadNotes&&(!match.notes||match.notes.indexOf(leadNotes)===-1)){
+      match.notes=match.notes?(match.notes+"\n\n"+leadNotes):leadNotes;
+      await qUp("fir_clients",c2db(match));
+      renderCL();
+    }
+    return match;
+  }
+  var nc={id:uid(),name:d.customer||"",phone:d.phone||"",email:d.email||"",address:d.address||"",notes:leadNotes,created:Date.now()};
   clients.push(nc);await qUp("fir_clients",c2db(nc));renderCL();
   return nc;
 }
@@ -938,6 +945,13 @@ async function updateLeadStatus(id,stat){
 function convertLead(id){
   var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===id){l=leads[i];break}}
   if(!l)return;
+  var existingEst=null;
+  for(var i=0;i<ests.length;i++){if(ests[i].leadId===id&&ests[i].status!=="declined"){existingEst=ests[i];break}}
+  if(existingEst){
+    openEF(existingEst.id);
+    toast("This lead already has an estimate \u2014 opening it");
+    return;
+  }
   openEF(null);
   document.getElementById("fcn").value=l.name||"";
   document.getElementById("fcp").value=l.phone||"";
