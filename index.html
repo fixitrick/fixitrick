@@ -212,6 +212,7 @@ textarea{resize:vertical;min-height:64px}
     <button class="bs2" id="btn-appr" style="display:none" onclick="markStat('approved')">Approved</button>
     <button class="bs2" id="btn-decl" style="display:none" onclick="markStat('declined')">Declined</button>
     <button class="bs2" id="btn-sched" style="display:none" onclick="openSchedPicker()">Scheduled</button>
+    <button class="bs2" id="btn-startnow" style="display:none" onclick="startNow()">Start Now</button>
     <div id="sched-display" style="display:none;font-size:12px;font-weight:600;color:#0c5460;background:#d1ecf1;padding:6px 12px;border-radius:8px;margin-top:4px"></div>
     <button class="bs2" id="btn-inp" style="display:none" onclick="markStat('in_progress')">In Progress</button>
     <button class="bs2" id="btn-comp" style="display:none" onclick="completeAndInvoice()">Complete &amp; Invoice</button>
@@ -465,8 +466,8 @@ function db2i(r){return{id:r.id,invNum:r.inv_num,estId:r.est_id,estNum:r.est_num
 function c2db(c){return{id:c.id,name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",notes:c.notes||"",created_at:c.created||Date.now()};}
 function db2c(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,notes:r.notes||"",created:r.created_at};}
 
-function l2db(l){return{id:l.id,name:l.name||"",phone:l.phone||"",email:l.email||"",address:l.address||"",source:l.source||"",job_desc:l.jobDesc||"",status:l.status||"new",created_at:l.created||Date.now()};}
-function db2l(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,source:r.source,jobDesc:r.job_desc,status:r.status||"new",created:r.created_at};}
+function l2db(l){return{id:l.id,name:l.name||"",phone:l.phone||"",email:l.email||"",address:l.address||"",source:l.source||"",job_desc:l.jobDesc||"",status:l.status||"new",created_at:l.created||Date.now(),visit_date:l.visitDate||null,visit_duration_min:l.visitDurationMin||60,zoho_sync_ok:l.zohoSyncOk!==false};}
+function db2l(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,source:r.source,jobDesc:r.job_desc,status:r.status||"new",created:r.created_at,visitDate:r.visit_date||null,visitDurationMin:r.visit_duration_min||60,zohoSyncOk:r.zoho_sync_ok!==false};}
 function x2db(e){return{id:e.id,date:e.date||"",amount:e.amount||0,category:e.cat||"",description:e.desc||"",created_at:e.created||Date.now()};}
 function db2x(r){return{id:r.id,date:r.date,amount:+r.amount,cat:r.category,desc:r.description,created:r.created_at};}
 function pe2db(p){return{id:p.id,title:p.title||"",event_date:p.eventDate,duration_min:p.durationMin||60,created_at:p.created||Date.now(),zoho_sync_ok:p.zohoSyncOk!==false};}
@@ -736,16 +737,24 @@ function openEF(id){mats=[];labs=[];photos=[];pendingPhotoDeletes=[];document.ge
 function updBtns(s){
   var sent=document.getElementById("btn-sent"),appr=document.getElementById("btn-appr"),decl=document.getElementById("btn-decl");
   var sched=document.getElementById("btn-sched"),inp=document.getElementById("btn-inp"),comp=document.getElementById("btn-comp"),inv=document.getElementById("btn-inv");
+  var startnow=document.getElementById("btn-startnow");
   sent.style.display=s==="draft"?"":"none";
   appr.style.display=s==="sent"?"":"none";
   decl.style.display=s==="sent"?"":"none";
   sched.style.display=(s==="approved"||s==="scheduled")?"":"none";
   if(sched)sched.textContent=s==="scheduled"?"Reschedule":"Scheduled";
+  if(startnow)startnow.style.display=s==="approved"?"":"none";
   inp.style.display=s==="scheduled"?"":"none";
   comp.style.display=(s==="scheduled"||s==="in_progress")?"":"none";
   inv.style.display=s==="complete"?"":"none";
   var howto=document.getElementById("btn-howto");
   if(howto)howto.style.display=(s==="scheduled"||s==="in_progress")?"":"none";
+}
+async function startNow(){
+  var id=document.getElementById("feid").value;
+  if(!id){toast("Save first");return}
+  if(!confirm("Start this job now? This skips scheduling entirely \u2014 no calendar entry, no confirmation email \u2014 and moves straight to In Progress."))return;
+  await markStat("in_progress");
 }
 function openHowTo(jobType){
   document.getElementById("howto-jobtype").value=jobType||"";
@@ -967,13 +976,14 @@ function renderLL(){
     var isOpen=l.status!=="won"&&l.status!=="lost";
     var age=ageLabel(l.created);
     var border=ageBorder(l.created);
+    var visitLine=l.visitDate?('<div class="lim" style="color:#0c5460">📅 Visit: '+new Date(l.visitDate).toLocaleDateString([],{month:"short",day:"numeric"})+" "+new Date(l.visitDate).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+(l.zohoSyncOk===false?' <span style="color:#b8860b;font-weight:700">\u26a0 sync failed</span> <button class="bs2" style="padding:1px 7px;font-size:10px" onclick="event.stopPropagation();retryLeadVisitSync(\''+l.id+'\')">Retry</button>':' <button class="bs2" style="padding:1px 7px;font-size:10px" onclick="event.stopPropagation();cancelVisit(\''+l.id+'\')">Cancel</button>')+"</div>"):"";
     var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
-    return"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span></div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+esc(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div></div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
+    return"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span></div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+esc(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div>"+visitLine+"</div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(isOpen?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();openVisitModal('"+l.id+"')\">📅 "+(l.visitDate?"Reschedule":"Visit")+"</button>":"")+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
   }).join(""):q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>';
   var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
 }
 function toggleHideLost(){var c=document.getElementById("lead-hide-lost");ls("fir:hideLostLeads",!!(c&&c.checked));renderLL();}
-async function delLead(id){if(!confirm("Delete this lead? This can't be undone."))return;leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
+async function delLead(id){if(!confirm("Delete this lead? This can't be undone."))return;var hadVisit=false;for(var i=0;i<leads.length;i++){if(leads[i].id===id){hadVisit=!!leads[i].visitDate;break}}leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");if(hadVisit){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"lead",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"lead",id:id});}}var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 
 
 async function clearAllData(){
@@ -1270,7 +1280,7 @@ function openSchedPicker(){
   m.style.display="flex";
   updateSchedContext();
 }
-function sameDayCalendarItems(dt,excludeEstId){
+function sameDayCalendarItems(dt,excludeEstId,excludeLeadId){
   var sameDayJobs=ests.filter(function(e){
     if(e.id===excludeEstId||!e.schedDate)return false;
     if(e.status!=="scheduled"&&e.status!=="in_progress")return false;
@@ -1279,8 +1289,13 @@ function sameDayCalendarItems(dt,excludeEstId){
   var sameDayPe=personalEvents.filter(function(p){
     return p.eventDate&&new Date(p.eventDate).toLocaleDateString("en-CA")===dt;
   });
+  var sameDayVisits=leads.filter(function(l){
+    if(l.id===excludeLeadId||!l.visitDate)return false;
+    return new Date(l.visitDate).toLocaleDateString("en-CA")===dt;
+  });
   return sameDayJobs.map(function(e){return{ts:e.schedDate,durationMin:e.schedDurationMin||60,label:esc(e.customer||"")};})
     .concat(sameDayPe.map(function(p){return{ts:p.eventDate,durationMin:p.durationMin||60,label:esc(p.title||"Personal")+" (personal)"};}))
+    .concat(sameDayVisits.map(function(l){return{ts:l.visitDate,durationMin:l.visitDurationMin||60,label:esc(l.name||"")+" (visit)"};}))
     .sort(function(a,b){return a.ts-b.ts;});
 }
 function rangesOverlap(startA,durA,startB,durB){
@@ -1315,7 +1330,9 @@ function fmtRange(ts,durationMin){
 }
 function setDuration(prefix,mins){
   document.getElementById(prefix+"-duration").value=mins;
-  if(prefix==="sched")updateSchedContext();else updatePeContext();
+  if(prefix==="sched")updateSchedContext();
+  else if(prefix==="visit")updateVisitContext();
+  else updatePeContext();
 }
 function updateSchedContext(){
   var id=document.getElementById("feid").value;
@@ -1363,6 +1380,100 @@ function updatePeContext(){
   var items=sameDayCalendarItems(dt,null);
   var candTs=tm?new Date(dt+"T"+tm).getTime():null;
   box.innerHTML=renderCalendarContext(dt,candTs,dur,items);
+}
+function openVisitModal(leadId){
+  var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===leadId){l=leads[i];break}}
+  if(!l)return;
+  document.getElementById("visit-leadid").value=leadId;
+  document.getElementById("visit-lead-name").textContent=l.name||"";
+  if(l.visitDate){
+    document.getElementById("visit-date").value=new Date(l.visitDate).toLocaleDateString("en-CA");
+    document.getElementById("visit-time").value=new Date(l.visitDate).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+    document.getElementById("visit-duration").value=l.visitDurationMin||60;
+  }else{
+    document.getElementById("visit-date").value="";
+    document.getElementById("visit-time").value="08:00";
+    document.getElementById("visit-duration").value=60;
+  }
+  document.getElementById("visit-context").innerHTML="";
+  document.getElementById("visit-modal").style.display="flex";
+  updateVisitContext();
+}
+function closeVisitModal(){
+  document.getElementById("visit-modal").style.display="none";
+}
+function updateVisitContext(){
+  var leadId=document.getElementById("visit-leadid").value;
+  var dt=document.getElementById("visit-date").value;
+  var tm=document.getElementById("visit-time").value;
+  var dur=parseInt(document.getElementById("visit-duration").value,10)||60;
+  var box=document.getElementById("visit-context");
+  if(!box)return;
+  if(!dt){box.innerHTML="";return}
+  var items=sameDayCalendarItems(dt,null,leadId);
+  var candTs=tm?new Date(dt+"T"+tm).getTime():null;
+  box.innerHTML=renderCalendarContext(dt,candTs,dur,items);
+}
+async function saveVisit(){
+  var leadId=document.getElementById("visit-leadid").value;
+  var dt=document.getElementById("visit-date").value;
+  var tm=document.getElementById("visit-time").value;
+  var dur=parseInt(document.getElementById("visit-duration").value,10)||60;
+  if(!leadId)return;
+  if(!dt){toast("Pick a date");return}
+  var visitTs=new Date(dt+"T"+(tm||"08:00")).getTime();
+  var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===leadId){l=leads[i];break}}
+  if(!l)return;
+  l.visitDate=visitTs;
+  l.visitDurationMin=dur;
+  await qUp("fir_leads",l2db(l));
+  persistLocal();
+  var zohoOk=true;
+  try{
+    var zr=await fetch(SURL+"/functions/v1/zoho-lead-visit",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({leadId:leadId,durationMin:dur})});
+    var zj=await zr.json();
+    if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
+  }catch(zerr){console.error("Zoho visit sync failed, will retry later:",zerr);zohoOk=false;queueWrite("zoho-lead-visit","zoho-lead-visit",{leadId:leadId,durationMin:dur});}
+  l.zohoSyncOk=zohoOk;
+  try{await sbUp("fir_leads",Object.assign(l2db(l),{zoho_sync_ok:zohoOk}));}catch(e){}
+  closeVisitModal();
+  renderLL();
+  renderSched();
+  toast(zohoOk?"Visit scheduled":"Visit saved, but calendar sync failed");
+}
+async function cancelVisit(leadId){
+  if(!confirm("Cancel this scheduled visit?"))return;
+  var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===leadId){l=leads[i];break}}
+  if(!l)return;
+  var hadVisit=!!l.visitDate;
+  l.visitDate=null;
+  if(hadVisit){
+    try{
+      var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"lead",id:leadId})});
+      var zj=await zr.json();
+      if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
+    }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"lead",id:leadId});}
+  }
+  await qUp("fir_leads",l2db(l));
+  persistLocal();
+  renderLL();
+  renderSched();
+  toast("Visit canceled");
+}
+async function retryLeadVisitSync(leadId){
+  var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===leadId){l=leads[i];break}}
+  if(!l)return;
+  var ok=true;
+  try{
+    var zr=await fetch(SURL+"/functions/v1/zoho-lead-visit",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({leadId:leadId,durationMin:l.visitDurationMin||60})});
+    var zj=await zr.json();
+    if(!zr.ok||!zj.ok)ok=false;
+  }catch(e){ok=false;}
+  l.zohoSyncOk=ok;
+  await qUp("fir_leads",l2db(l));
+  renderLL();
+  renderSched();
+  toast(ok?"Calendar sync fixed":"Still failing to sync");
 }
 async function savePersonalEvent(){
   var title=document.getElementById("pe-title").value.trim();
@@ -1501,7 +1612,15 @@ function renderSched(){
     var html='<div class="li" style="flex-wrap:wrap;gap:6px;border-left:3px solid #6f42c1"><div style="flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+'</div><div class="lim">'+esc(p.title||"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge" style="background:#6f42c1;color:#fff">personal</span><button class="bs2" style="padding:2px 8px;font-size:11px" onclick="deletePersonalEvent(\''+p.id+'\')">Delete</button></div></div>';
     return{ts:p.eventDate,html:html};
   });
-  var list=jobRows.concat(peRows).sort(function(a,b){return a.ts-b.ts;});
+  var visitRows=leads.filter(function(l){return!!l.visitDate;}).map(function(l){
+    var d=new Date(l.visitDate);
+    var dayLabel=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
+    var timeLabel=fmtRange(l.visitDate,l.visitDurationMin||60);
+    var syncBadge=l.zohoSyncOk===false?'<span style="color:#b8860b;font-weight:700;font-size:11px">⚠ sync failed</span> <button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();retryLeadVisitSync(\''+l.id+'\')">Retry</button>':'<span style="color:#28a745;font-size:11px">✓ synced</span>';
+    var html='<div class="li" style="flex-wrap:wrap;gap:6px;border-left:3px solid #0c5460"><div onclick="editLead(\''+l.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+'</div><div class="lim">'+esc(l.name||"")+(l.address?" · "+esc(l.address):"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge" style="background:#0c5460;color:#fff">visit</span><button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();cancelVisit(\''+l.id+'\')">Cancel</button></div></div>';
+    return{ts:l.visitDate,html:html};
+  });
+  var list=jobRows.concat(peRows).concat(visitRows).sort(function(a,b){return a.ts-b.ts;});
   document.getElementById("schedlist").innerHTML=list.length?list.map(function(r){return r.html;}).join(""):'<div class="es">No upcoming scheduled jobs</div>';
 }
 </script>
@@ -1567,6 +1686,33 @@ function renderSched(){
     <div style="display:flex;gap:8px">
       <button class="bp" style="flex:1" onclick="savePersonalEvent()">Save</button>
       <button class="bs2" style="flex:1" onclick="closePersonalEventModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Visit Modal (for leads) -->
+<div id="visit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:16px;padding:1.4rem;width:92%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+    <input type="hidden" id="visit-leadid">
+    <div style="font-size:15px;font-weight:700;margin-bottom:1rem;color:var(--text)">Schedule Visit</div>
+    <div id="visit-lead-name" style="font-size:13px;color:var(--muted);margin-bottom:1rem"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Date</label><input type="date" id="visit-date" oninput="updateVisitContext()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Time</label><input type="time" id="visit-time" oninput="updateVisitContext()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box"></div>
+    <div style="margin-bottom:.85rem"><label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Duration</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('visit',30)">30m</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('visit',60)">1h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('visit',90)">1.5h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('visit',120)">2h</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('visit',240)">Half day</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('visit',480)">Full day</button>
+      </div>
+      <input type="number" id="visit-duration" min="5" step="5" value="60" oninput="updateVisitContext()" placeholder="Custom minutes" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
+    <div id="visit-context" style="margin-bottom:1.1rem;font-size:12px;background:var(--bg);border-radius:8px;padding:8px 10px;max-height:120px;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px">
+      <button class="bp" style="flex:1" onclick="saveVisit()">Save</button>
+      <button class="bs2" style="flex:1" onclick="closeVisitModal()">Cancel</button>
     </div>
   </div>
 </div>
