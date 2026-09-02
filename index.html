@@ -251,6 +251,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="r2"><div class="mb"><label>Email</label><input id="lle" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Source</label><select id="lls"><option>Website</option><option>Referral</option><option>Phone Call</option><option>Text</option><option>Neighbor</option><option>Other</option></select></div></div>
     <div class="mb"><label>Address</label><input id="lla" placeholder="123 Main St, Dublin, OH" autocomplete="off" autocorrect="off" autocapitalize="off"></div>
     <div class="mb"><label>Job Description</label><textarea id="llj" placeholder="What do they need done?" style="min-height:56px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
+    <div class="mb"><label>Notes</label><textarea id="lln-notes" placeholder="Gate code, dog on property, access details, etc." style="min-height:48px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveLead()">Save Lead</button><button class="bs2" onclick="toggleLF()">Cancel</button></div>
   </div>
   <div class="card"><input id="lead-search" placeholder="Search leads..." oninput="renderLL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-bottom:8px;cursor:pointer"><input type="checkbox" id="lead-hide-lost" onchange="toggleHideLost()"> Hide lost leads</label><div id="llist"></div><div id="lead-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('lead')">Load older records</button></div></div>
@@ -466,8 +467,8 @@ function db2i(r){return{id:r.id,invNum:r.inv_num,estId:r.est_id,estNum:r.est_num
 function c2db(c){return{id:c.id,name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",notes:c.notes||"",created_at:c.created||Date.now()};}
 function db2c(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,notes:r.notes||"",created:r.created_at};}
 
-function l2db(l){return{id:l.id,name:l.name||"",phone:l.phone||"",email:l.email||"",address:l.address||"",source:l.source||"",job_desc:l.jobDesc||"",status:l.status||"new",created_at:l.created||Date.now(),visit_date:l.visitDate||null,visit_duration_min:l.visitDurationMin||60,zoho_sync_ok:l.zohoSyncOk!==false};}
-function db2l(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,source:r.source,jobDesc:r.job_desc,status:r.status||"new",created:r.created_at,visitDate:r.visit_date||null,visitDurationMin:r.visit_duration_min||60,zohoSyncOk:r.zoho_sync_ok!==false};}
+function l2db(l){return{id:l.id,name:l.name||"",phone:l.phone||"",email:l.email||"",address:l.address||"",source:l.source||"",job_desc:l.jobDesc||"",notes:l.notes||"",status:l.status||"new",created_at:l.created||Date.now(),visit_date:l.visitDate||null,visit_duration_min:l.visitDurationMin||60,zoho_sync_ok:l.zohoSyncOk!==false};}
+function db2l(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,source:r.source,jobDesc:r.job_desc,notes:r.notes||"",status:r.status||"new",created:r.created_at,visitDate:r.visit_date||null,visitDurationMin:r.visit_duration_min||60,zohoSyncOk:r.zoho_sync_ok!==false};}
 function x2db(e){return{id:e.id,date:e.date||"",amount:e.amount||0,category:e.cat||"",description:e.desc||"",created_at:e.created||Date.now()};}
 function db2x(r){return{id:r.id,date:r.date,amount:+r.amount,cat:r.category,desc:r.description,created:r.created_at};}
 function pe2db(p){return{id:p.id,title:p.title||"",event_date:p.eventDate,duration_min:p.durationMin||60,created_at:p.created||Date.now(),zoho_sync_ok:p.zohoSyncOk!==false};}
@@ -491,7 +492,11 @@ function findClientMatch(phone,email,name){
 async function findOrCreateClient(d){
   var match=findClientMatch(d.phone,d.email,d.customer);
   if(match)return match;
-  var nc={id:uid(),name:d.customer||"",phone:d.phone||"",email:d.email||"",address:d.address||"",created:Date.now()};
+  var carriedNotes="";
+  if(d.leadId){
+    for(var i=0;i<leads.length;i++){if(leads[i].id===d.leadId){carriedNotes=leads[i].notes||"";break}}
+  }
+  var nc={id:uid(),name:d.customer||"",phone:d.phone||"",email:d.email||"",address:d.address||"",notes:carriedNotes,created:Date.now()};
   clients.push(nc);await qUp("fir_clients",c2db(nc));renderCL();
   return nc;
 }
@@ -905,23 +910,23 @@ async function toInvoice(){var id=document.getElementById("feid").value;if(!id){
 async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;invs[i].paidAt=Date.now();await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
 
 function toggleLF(){var f=document.getElementById("lform");if(f.style.display==="none"){["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("lls").selectedIndex=0;document.getElementById("lform-title").textContent="New Lead";f.style.display="block";}else{f.style.display="none";}}
-function editLead(id){var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===id){l=leads[i];break}}if(!l)return;document.getElementById("llid").value=l.id;document.getElementById("lln").value=l.name||"";document.getElementById("llp").value=l.phone||"";document.getElementById("lle").value=l.email||"";document.getElementById("lls").value=l.source||"Website";document.getElementById("lla").value=l.address||"";document.getElementById("llj").value=l.jobDesc||"";document.getElementById("lform-title").textContent="Edit Lead";document.getElementById("lform").style.display="block";}
+function editLead(id){var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===id){l=leads[i];break}}if(!l)return;document.getElementById("llid").value=l.id;document.getElementById("lln").value=l.name||"";document.getElementById("llp").value=l.phone||"";document.getElementById("lle").value=l.email||"";document.getElementById("lls").value=l.source||"Website";document.getElementById("lla").value=l.address||"";document.getElementById("llj").value=l.jobDesc||"";document.getElementById("lln-notes").value=l.notes||"";document.getElementById("lform-title").textContent="Edit Lead";document.getElementById("lform").style.display="block";}
 async function saveLead(){
   var name=document.getElementById("lln").value.trim();
   if(!name){toast("Name required");return}
   var id=document.getElementById("llid").value;
-  var phone=document.getElementById("llp").value,email=document.getElementById("lle").value,source=document.getElementById("lls").value,address=document.getElementById("lla").value,jobDesc=document.getElementById("llj").value;
+  var phone=document.getElementById("llp").value,email=document.getElementById("lle").value,source=document.getElementById("lls").value,address=document.getElementById("lla").value,jobDesc=document.getElementById("llj").value,notes=document.getElementById("lln-notes").value;
   if(id){
     var existing=null;
     for(var i=0;i<leads.length;i++){if(leads[i].id===id){existing=leads[i];break}}
-    if(existing){existing.name=name;existing.phone=phone;existing.email=email;existing.source=source;existing.address=address;existing.jobDesc=jobDesc;await qUp("fir_leads",l2db(existing));}
+    if(existing){existing.name=name;existing.phone=phone;existing.email=email;existing.source=source;existing.address=address;existing.jobDesc=jobDesc;existing.notes=notes;await qUp("fir_leads",l2db(existing));}
   }else{
-    var nl={id:uid(),name:name,phone:phone,email:email,source:source,address:address,jobDesc:jobDesc,status:"new",created:Date.now()};
+    var nl={id:uid(),name:name,phone:phone,email:email,source:source,address:address,jobDesc:jobDesc,notes:notes,status:"new",created:Date.now()};
     leads.push(nl);
     await qUp("fir_leads",l2db(nl));
   }
   persistLocal();
-  ["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});
+  ["llid","lln","llp","lle","lla","llj","lln-notes"].forEach(function(x){document.getElementById(x).value=""});
   document.getElementById("lform").style.display="none";
   renderLL();renderDB();toast("Lead saved!");
 }
