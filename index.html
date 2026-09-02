@@ -948,13 +948,9 @@ function convertLead(id){
   var existingEst=null;
   for(var i=0;i<ests.length;i++){if(ests[i].leadId===id&&ests[i].status!=="declined"){existingEst=ests[i];break}}
   if(existingEst){
-    var openExisting=confirm("This lead already has an open estimate ("+(existingEst.estNum||"unsaved")+", status: "+existingEst.status+").\n\nOK \u2014 open that estimate\nCancel \u2014 start a new estimate for a different job");
-    if(openExisting){
-      openEF(existingEst.id);
-      toast("Opening existing estimate");
-      return;
-    }
-    // Cancel: fall through and start a genuinely new estimate for this lead
+    openEF(existingEst.id);
+    toast("Opening existing estimate");
+    return;
   }
   openEF(null);
   document.getElementById("fcn").value=l.name||"";
