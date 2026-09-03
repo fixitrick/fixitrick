@@ -175,7 +175,7 @@ textarea{resize:vertical;min-height:64px}
     <div id="photostrip" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
   </div>
   <div class="card"><div class="ct">AI Estimator</div>
-    <div id="apiwarn" class="api-warn" style="display:none"><strong>No API key set</strong> Go to Settings and add your Anthropic API key.</div>
+    <div id="apiwarn" class="api-warn" style="display:none"><strong>AI features unavailable</strong> Check your connection and try again.</div>
     <div class="mb"><label>Category</label><select id="fjc"><option value="">Select...</option><option>Carpentry</option><option>Drywall</option><option>Electrical (minor)</option><option>Flooring</option><option>General labor</option><option>Landscaping</option><option>Painting</option><option>Plumbing (minor)</option><option>Roofing / Gutters</option><option>Tile / Masonry</option><option>Other</option></select></div>
     <div class="mb"><label>Describe the job</label><textarea id="fjd" placeholder="e.g. Replace leaky kitchen faucet, customer has the part."></textarea></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="runAI()">AI Estimate</button><button class="bs2" onclick="runUpsells()">Upsells</button></div>
@@ -264,7 +264,6 @@ textarea{resize:vertical;min-height:64px}
     <div class="r2"><div class="mb"><label>Email</label><input id="se" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Website</label><input id="sw" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="card"><div class="ct">AI - Anthropic API Key</div>
-    <div class="mb"><label>API Key (get free at console.anthropic.com)</label><input id="sak" type="password" placeholder="sk-ant-..." autocomplete="off" autocorrect="off" autocapitalize="off"></div>
     <p style="font-size:11px;color:var(--faint)">Stored locally on your device only. Required for AI estimate and upsell features.</p>
   </div>
   <div class="card"><div class="ct">Default Rates</div>
@@ -460,7 +459,7 @@ function persistLocal(){
 window.addEventListener("online",function(){flushQueue();});
 setInterval(function(){if(pendingQueue.length)flushQueue();},30000);
 
-var S={biz:"FixItRick Home Repair Services",phone:"614-966-2311",email:"rickh@fixitrick.com",web:"fixitrick.com",apiKey:"",rate:100,markup:20,tax:0,terms:"Payment due within 30 days. Checks payable to Rick H.\nVenmo/Zelle: 614-966-2311",valid:30,due:30,nextEst:1,nextInv:1};
+var S={biz:"FixItRick Home Repair Services",phone:"614-966-2311",email:"rickh@fixitrick.com",web:"fixitrick.com",rate:100,markup:20,tax:0,terms:"Payment due within 30 days. Checks payable to Rick H.\nVenmo/Zelle: 614-966-2311",valid:30,due:30,nextEst:1,nextInv:1};
 function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}else{localStorage.setItem(k,JSON.stringify(v))}}
 // Row mappers
 function e2db(e){return{id:e.id,est_num:e.estNum||"",customer:e.customer||"",phone:e.phone||"",email:e.email||"",address:e.address||"",cat:e.cat||"",description:e.desc||"",notes:e.notes||"",markup_pct:e.markupPct||0,tax_pct:e.taxPct||0,discount:e.discount||0,deposit:e.deposit||0,total:e.total||0,balance:e.balance||0,status:e.status||"draft",lead_id:e.leadId||null,mats:e.mats||[],labs:e.labs||[],photos:e.photos||[],created_at:e.created||Date.now(),updated_at:Date.now(),emailed_at:e.emailedAt||null,emailed_to:e.emailedTo||null,zoho_sync_ok:e.zohoSyncOk!==false};}
@@ -517,7 +516,6 @@ function fmtN(n){return"EST-"+String(n).padStart(3,"0")}
 function fmtI(n){return"INV-"+String(n).padStart(3,"0")}
 function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.style.display="block";setTimeout(function(){t.style.display="none"},2200)}
 async function load(){
-  var ak=ls("fir:apikey");if(ak)S.apiKey=ak;
   syncBadge("Syncing...",null);
   try{
     var cutoff=Date.now()-90*24*60*60*1000;
@@ -539,7 +537,6 @@ async function load(){
     try{personalEvents=(await rp.json()).map(db2pe);}catch(e){personalEvents=[]}
     var sd=await rs.json();
     if(sd&&sd[0]&&sd[0].data){S=Object.assign(S,sd[0].data);}
-    S.apiKey=ak||"";
     pendingQueue=qLoad();
     if(pendingQueue.length){await flushQueue();}else{syncBadge("Synced",true);}
   }catch(err){
@@ -550,7 +547,6 @@ async function load(){
     var lc=ls("fir:c");if(lc)clients=lc;
     var lx=ls("fir:x");if(lx)exps=lx;
     var ll=ls("fir:l");if(ll)leads=ll;
-    S.apiKey=ak||"";
     pendingQueue=qLoad();
     updateSyncIndicator();
   }
@@ -720,15 +716,12 @@ function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";
 async function delClient(id){if(!confirm("Delete this client? This can't be undone."))return;clients=clients.filter(function(c){return c.id!==id});renderCL();toast("Client deleted");var ok=await qDel("fir_clients",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"editExpense('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>";var older=document.getElementById("exp-older");if(older)older.style.display=expAllLoaded?"none":"block";}
 async function delExp(id){if(!confirm("Delete this expense? This can't be undone."))return;exps=exps.filter(function(e){return e.id!==id});renderXL();toast("Expense deleted");var ok=await qDel("fir_expenses",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
-function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sak").value=S.apiKey||"";document.getElementById("sr").value=(S.rate===undefined||S.rate===null)?100:S.rate;document.getElementById("sm").value=(S.markup===undefined||S.markup===null)?20:S.markup;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=(S.valid===undefined||S.valid===null)?30:S.valid;document.getElementById("sid").value=(S.due===undefined||S.due===null)?30:S.due;document.getElementById("sne").value=(S.nextEst===undefined||S.nextEst===null)?1:S.nextEst;document.getElementById("sni").value=(S.nextInv===undefined||S.nextInv===null)?1:S.nextInv}
+function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sr").value=(S.rate===undefined||S.rate===null)?100:S.rate;document.getElementById("sm").value=(S.markup===undefined||S.markup===null)?20:S.markup;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=(S.valid===undefined||S.valid===null)?30:S.valid;document.getElementById("sid").value=(S.due===undefined||S.due===null)?30:S.due;document.getElementById("sne").value=(S.nextEst===undefined||S.nextEst===null)?1:S.nextEst;document.getElementById("sni").value=(S.nextInv===undefined||S.nextInv===null)?1:S.nextInv}
 async function saveSettings(){
   S.biz=document.getElementById("sb").value||"FixItRick";
   S.phone=document.getElementById("sp").value;
   S.email=document.getElementById("se").value;
   S.web=document.getElementById("sw").value;
-  var ak=document.getElementById("sak").value;
-  S.apiKey=ak;
-  ls("fir:apikey",ak);
   (function(){var v=document.getElementById("sr").value;S.rate=(v===""||isNaN(+v))?100:+v;})();
   (function(){var v=document.getElementById("sm").value;S.markup=(v===""||isNaN(+v))?20:+v;})();
   S.tax=+document.getElementById("st").value||0;
@@ -738,14 +731,13 @@ async function saveSettings(){
   (function(){var v=document.getElementById("sne").value;S.nextEst=(v===""||isNaN(+v))?1:+v;})();
   (function(){var v=document.getElementById("sni").value;S.nextInv=(v===""||isNaN(+v))?1:+v;})();
   var toCloud=Object.assign({},S);
-  delete toCloud.apiKey;
   document.getElementById("hbiz").textContent=S.biz;
   document.getElementById("hcon").textContent=S.phone+" · "+S.email;
   var ok=await qUp("fir_settings",{id:"main",data:toCloud});
   persistLocal();
   toast(ok?"Settings saved and synced!":"Saved locally — will sync when back online");
 }
-function openEF(id){mats=[];labs=[];photos=[];pendingPhotoDeletes=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display=S.apiKey?"none":"block";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";document.getElementById("fleadid").value="";var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}document.getElementById("btn-email").style.display="";addML();addLL();renderPhotos();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=(e.markupPct!==undefined&&e.markupPct!==null)?e.markupPct:S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";document.getElementById("fleadid").value=e.leadId||"";mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));photos=JSON.parse(JSON.stringify(e.photos||[]));if(!mats.length)addML();if(!labs.length)addLL();renderPhotos();updBtns(e.status);
+function openEF(id){mats=[];labs=[];photos=[];pendingPhotoDeletes=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display="none";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";document.getElementById("fleadid").value="";var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}document.getElementById("btn-email").style.display="";addML();addLL();renderPhotos();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=(e.markupPct!==undefined&&e.markupPct!==null)?e.markupPct:S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";document.getElementById("fleadid").value=e.leadId||"";mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));photos=JSON.parse(JSON.stringify(e.photos||[]));if(!mats.length)addML();if(!labs.length)addLL();renderPhotos();updBtns(e.status);
     // Show scheduled date if set
     var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}
     var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}
@@ -811,7 +803,6 @@ function renderGuide(g){
 async function getGuide(){
   var jt=document.getElementById("howto-jobtype").value.trim();
   if(!jt){toast("Enter a job type first");return}
-  if(!S.apiKey){toast("Add API key in Settings");return}
   var jtKey=jt.toLowerCase().replace(/\s+/g," ");
   document.getElementById("howto-guide-content").innerHTML='<div class="es">Checking for a saved guide...</div>';
   try{
@@ -820,7 +811,7 @@ async function getGuide(){
     var cached=await cr.json();
     if(cached&&cached.length){renderGuide(cached[0]);return}
     document.getElementById("howto-guide-content").innerHTML='<div class="es">Generating guide...</div>';
-    var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:"You are an experienced home repair pro. Give a practical how-to guide for this job: \""+jt+"\". Return ONLY valid JSON, no markdown fences:\n{\"tools\":[\"item\"],\"materials\":[\"item\"],\"steps\":[\"step\"],\"safety_notes\":[\"note\"],\"est_time\":\"e.g. 1-2 hours\"}\n\nBe specific and concise. 5-10 steps typical."}]})});
+    var r=await fetch(SURL+"/functions/v1/ai-proxy",{method:"POST",headers:{"Content-Type":"application/json","apikey":SKEY,"Authorization":"Bearer "+ATOKEN},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:"You are an experienced home repair pro. Give a practical how-to guide for this job: \""+jt+"\". Return ONLY valid JSON, no markdown fences:\n{\"tools\":[\"item\"],\"materials\":[\"item\"],\"steps\":[\"step\"],\"safety_notes\":[\"note\"],\"est_time\":\"e.g. 1-2 hours\"}\n\nBe specific and concise. 5-10 steps typical."}]})});
     var d=await r.json();
     if(d.stop_reason==="max_tokens")throw new Error("Response was cut off \u2014 try a more specific job type");
     var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();
@@ -854,7 +845,6 @@ async function handleHowToPhoto(evt){
 }
 async function askAboutPhoto(){
   if(!howtoPhotoBase64){toast("Take a photo first");return}
-  if(!S.apiKey){toast("Add API key in Settings");return}
   var q=document.getElementById("howto-question").value.trim()||"What do you see here, and is there anything I should be careful about?";
   var jt=document.getElementById("howto-jobtype").value.trim();
   document.getElementById("howto-question").value="";
@@ -866,7 +856,7 @@ async function askAboutPhoto(){
   howtoConvoDisplay.push({q:q,a:null});
   renderHowtoConvo(true);
   try{
-    var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,messages:howtoConvo})});
+    var r=await fetch(SURL+"/functions/v1/ai-proxy",{method:"POST",headers:{"Content-Type":"application/json","apikey":SKEY,"Authorization":"Bearer "+ATOKEN},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,messages:howtoConvo})});
     var d=await r.json();
     if(d.stop_reason==="max_tokens")throw new Error("Response was cut off");
     var answer=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("");
@@ -916,7 +906,7 @@ function calcT(){
   return{mt:mt,lt:lt,mka:mka,txa:txa,dc:dc,dep:dep,tot:tot,bal:bal};
 }
 function getFormData(){var t=calcT(),isNew=!document.getElementById("feid").value;var num=document.getElementById("festnum").value;if(!num&&isNew)num=fmtN(S.nextEst);return{id:document.getElementById("feid").value||uid(),estNum:num,customer:document.getElementById("fcn").value,phone:document.getElementById("fcp").value,email:document.getElementById("fce").value,address:document.getElementById("fca").value,cat:document.getElementById("fjc").value,desc:document.getElementById("fjd").value,notes:document.getElementById("fnotes").value,markupPct:+(document.getElementById("fmk").value)||0,taxPct:+(document.getElementById("ftx").value)||0,discount:t.dc,deposit:t.dep,total:t.tot,balance:t.bal,status:document.getElementById("fstat").value||"draft",leadId:document.getElementById("fleadid").value||null,mats:JSON.parse(JSON.stringify(mats)),labs:JSON.parse(JSON.stringify(labs)),photos:JSON.parse(JSON.stringify(photos)),created:Date.now()}}
-async function saveEst(){var d=getFormData(),isNew=!document.getElementById("feid").value;if(isNew){d.estNum=fmtN(S.nextEst);S.nextEst++;}var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
+async function saveEst(){var d=getFormData(),isNew=!document.getElementById("feid").value;if(isNew){d.estNum=fmtN(S.nextEst);S.nextEst++;}var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();var toCloud=Object.assign({},S);await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
 async function markStat(stat){
   var id=document.getElementById("feid").value;
   if(!id){toast("Save first");return}
@@ -940,7 +930,7 @@ async function markStat(stat){
   }
 }
 async function completeAndInvoice(){var btn=document.getElementById("btn-comp");if(btn){btn.disabled=true;btn.textContent="Working...";}await markStat("complete");await toInvoice();if(btn){btn.disabled=false;btn.textContent="Complete & Invoice";}}
-async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";if(e.customer){await findOrCreateClient(e);}await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));if(e.leadId){await updateLeadStatus(e.leadId,"won",true);}var toCloud=Object.assign({},S);delete toCloud.apiKey;await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!"+(e.leadId?" Linked lead marked won.":""));sv("inv");}
+async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;var due=new Date();due.setDate(due.getDate()+(S.due||30));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";if(e.customer){await findOrCreateClient(e);}await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));if(e.leadId){await updateLeadStatus(e.leadId,"won",true);}var toCloud=Object.assign({},S);await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!"+(e.leadId?" Linked lead marked won.":""));sv("inv");}
 async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;invs[i].paidAt=Date.now();await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
 
 function toggleLF(){var f=document.getElementById("lform");if(f.style.display==="none"){["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("lls").selectedIndex=0;document.getElementById("lform-title").textContent="New Lead";f.style.display="block";}else{f.style.display="none";}}
@@ -1073,7 +1063,6 @@ async function clearAllData(){
     estAllLoaded=false;invAllLoaded=false;leadAllLoaded=false;expAllLoaded=false;
     S.nextEst=1;S.nextInv=1;
     var toCloud=Object.assign({},S);
-    delete toCloud.apiKey;
     await qUp("fir_settings",{id:"main",data:toCloud});
     var sneEl=document.getElementById("sne");if(sneEl)sneEl.value=1;
     var sniEl=document.getElementById("sni");if(sniEl)sniEl.value=1;
@@ -1372,8 +1361,8 @@ async function emailInv(id){
     else{toast("Send failed \u2014 try again");}
   }catch(err){console.error(err);toast("Send failed \u2014 try again");}
 }
-async function runAI(){if(!S.apiKey){toast("Add API key in Settings");return}var desc=document.getElementById("fjd").value,cat=document.getElementById("fjc").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Estimating...";try{var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:photos.map(function(p){return{type:"image",source:{type:"url",url:p.url}}}).concat([{type:"text",text:"You are an experienced home repair estimator in Columbus, Ohio. Job: \""+( cat?cat+": ":"")+desc+"\". "+(photos.length?"Photos of the job are attached above — use them to inform materials and scope.":"")+"\n\nEstimate using current Columbus OH retail prices (Home Depot/Menards). Every material MUST have a realistic non-zero unit price.\n\nReturn ONLY valid JSON:\n{\"materials\":[{\"name\":\"specific item name with size/type\",\"qty\":1,\"unit\":12.99}],\"labor\":[{\"name\":\"task\",\"hrs\":1.5,\"rate\":"+S.rate+"}]}\n\nCritical rules: unit price must be > 0 for every material. Use real current prices. Labor rate $"+S.rate+"/hr."}])}]})});var d=await r.json();if(d.stop_reason==="max_tokens"){throw new Error("Response was cut off before it finished — try a shorter job description or fewer photos")}var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var j=JSON.parse(raw);if(j.materials){mats=j.materials.map(function(m){return{id:uid(),name:m.name,qty:m.qty||1,unit:+(m.unit)||0}});renderMats()}if(j.labor){labs=j.labor.map(function(l){return{id:uid(),name:l.name,hrs:+(l.hrs)||1,rate:+(l.rate)||S.rate}});renderLabs()}setTimeout(function(){calcT();},100);document.getElementById("aistat").textContent="";toast("AI estimate ready!")}catch(e){document.getElementById("aistat").textContent="Error: "+e.message;console.error(e)}}
-async function runUpsells(){if(!S.apiKey){toast("Add API key in Settings");return}var desc=document.getElementById("fjd").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Finding upsells...";try{var r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":S.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:"Job: \""+desc+"\". Suggest 3-4 upsell add-ons. ONLY JSON: [{title,desc,price}]"}]})});var d=await r.json();if(d.stop_reason==="max_tokens"){throw new Error("Response was cut off before it finished — try a shorter job description")}var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var items=JSON.parse(raw);document.getElementById("ulist").innerHTML=items.map(function(u){return"<div style=margin-bottom:8px><strong style=font-size:12px;color:#2d6a32>"+esc(u.title)+"</strong> <span style=color:var(--au);font-size:11px;font-weight:700>"+esc(u.price)+"</span><div style=font-size:11px;color:#555;margin-top:2px>"+esc(u.desc)+"</div></div>"}).join("");document.getElementById("ubox").style.display="block";document.getElementById("aistat").textContent=""}catch(e){document.getElementById("aistat").textContent="Error: "+e.message;console.error(e)}}
+async function runAI(){var desc=document.getElementById("fjd").value,cat=document.getElementById("fjc").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Estimating...";try{var r=await fetch(SURL+"/functions/v1/ai-proxy",{method:"POST",headers:{"Content-Type":"application/json","apikey":SKEY,"Authorization":"Bearer "+ATOKEN},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:photos.map(function(p){return{type:"image",source:{type:"url",url:p.url}}}).concat([{type:"text",text:"You are an experienced home repair estimator in Columbus, Ohio. Job: \""+( cat?cat+": ":"")+desc+"\". "+(photos.length?"Photos of the job are attached above — use them to inform materials and scope.":"")+"\n\nEstimate using current Columbus OH retail prices (Home Depot/Menards). Every material MUST have a realistic non-zero unit price.\n\nReturn ONLY valid JSON:\n{\"materials\":[{\"name\":\"specific item name with size/type\",\"qty\":1,\"unit\":12.99}],\"labor\":[{\"name\":\"task\",\"hrs\":1.5,\"rate\":"+S.rate+"}]}\n\nCritical rules: unit price must be > 0 for every material. Use real current prices. Labor rate $"+S.rate+"/hr."}])}]})});var d=await r.json();if(d.stop_reason==="max_tokens"){throw new Error("Response was cut off before it finished — try a shorter job description or fewer photos")}var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var j=JSON.parse(raw);if(j.materials){mats=j.materials.map(function(m){return{id:uid(),name:m.name,qty:m.qty||1,unit:+(m.unit)||0}});renderMats()}if(j.labor){labs=j.labor.map(function(l){return{id:uid(),name:l.name,hrs:+(l.hrs)||1,rate:+(l.rate)||S.rate}});renderLabs()}setTimeout(function(){calcT();},100);document.getElementById("aistat").textContent="";toast("AI estimate ready!")}catch(e){document.getElementById("aistat").textContent="Error: "+e.message;console.error(e)}}
+async function runUpsells(){var desc=document.getElementById("fjd").value;if(!desc.trim()){toast("Describe the job first");return}document.getElementById("aistat").textContent="Finding upsells...";try{var r=await fetch(SURL+"/functions/v1/ai-proxy",{method:"POST",headers:{"Content-Type":"application/json","apikey":SKEY,"Authorization":"Bearer "+ATOKEN},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:"Job: \""+desc+"\". Suggest 3-4 upsell add-ons. ONLY JSON: [{title,desc,price}]"}]})});var d=await r.json();if(d.stop_reason==="max_tokens"){throw new Error("Response was cut off before it finished — try a shorter job description")}var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();var items=JSON.parse(raw);document.getElementById("ulist").innerHTML=items.map(function(u){return"<div style=margin-bottom:8px><strong style=font-size:12px;color:#2d6a32>"+esc(u.title)+"</strong> <span style=color:var(--au);font-size:11px;font-weight:700>"+esc(u.price)+"</span><div style=font-size:11px;color:#555;margin-top:2px>"+esc(u.desc)+"</div></div>"}).join("");document.getElementById("ubox").style.display="block";document.getElementById("aistat").textContent=""}catch(e){document.getElementById("aistat").textContent="Error: "+e.message;console.error(e)}}
 tryResumeSession();
 
 // ── SCHEDULE PICKER ──────────────────────────────────────────────────────────
