@@ -444,12 +444,14 @@ async function qDel(table,id){
 }
 function persistLocal(){
   var cutoff=Date.now()-90*24*60*60*1000;
+  var openEstStatuses={draft:1,sent:1,approved:1,scheduled:1,in_progress:1,complete:1};
+  var openLeadStatuses={"new":1,contacted:1,quoted:1};
   try{
-    ls("fir:e",ests.filter(function(e){return e.created>=cutoff}));
-    ls("fir:i",invs.filter(function(i){return i.created>=cutoff}));
+    ls("fir:e",ests.filter(function(e){return e.created>=cutoff||openEstStatuses[e.status]}));
+    ls("fir:i",invs.filter(function(i){return i.created>=cutoff||!i.paid}));
     ls("fir:c",clients);
     ls("fir:x",exps.filter(function(x){return x.created>=cutoff}));
-    ls("fir:l",leads.filter(function(l){return l.created>=cutoff}));
+    ls("fir:l",leads.filter(function(l){return l.created>=cutoff||openLeadStatuses[l.status]}));
     ls("fir:s",S);
   }catch(e){
     console.error("Local offline cache save failed (data is still safe in Supabase):",e);
@@ -519,11 +521,14 @@ async function load(){
   syncBadge("Syncing...",null);
   try{
     var cutoff=Date.now()-90*24*60*60*1000;
-    var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
-    var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var estOr="or=(created_at.gte."+cutoff+",status.in.(draft,sent,approved,scheduled,in_progress,complete))";
+    var invOr="or=(created_at.gte."+cutoff+",paid.eq.false)";
+    var leadOr="or=(created_at.gte."+cutoff+",status.in.(new,contacted,quoted))";
+    var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc&"+estOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc&"+invOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
-    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&"+leadOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rp=await fetch(SURL+"/rest/v1/fir_personal_events?select=*&order=event_date.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rs=await fetch(SURL+"/rest/v1/fir_settings?id=eq.main",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     ests=(await re.json()).map(db2e);
@@ -990,7 +995,8 @@ async function refreshLeads(){
   if(btn){btn.disabled=true;btn.textContent="⟳ Refreshing...";}
   try{
     var cutoff=Date.now()-90*24*60*60*1000;
-    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var leadOr="or=(created_at.gte."+cutoff+",status.in.(new,contacted,quoted))";
+    var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&"+leadOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     if(!rl.ok)throw new Error("fetch failed");
     leads=(await rl.json()).map(db2l);
     leadAllLoaded=false;
