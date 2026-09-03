@@ -228,6 +228,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="r2"><div class="mb"><label>Name</label><input id="cln" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><div style="display:flex;gap:6px"><input id="clp" autocomplete="off" autocorrect="off" autocapitalize="off" style="flex:1"><button type="button" class="bs2" style="padding:0 12px" onclick="callFieldValue('clp')" title="Call">📞</button></div></div></div>
     <div class="r2"><div class="mb"><label>Email</label><input id="cle" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Address</label><input id="cla" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
     <div class="mb"><label>Notes</label><textarea id="clnotes" placeholder="Gate code, dog in yard, preferred contact method, etc." style="min-height:56px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
+    <div id="cl-history" style="display:none;margin-bottom:12px"></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveClient()">Save</button><button class="bs2" onclick="toggleCF()">Cancel</button></div>
   </div>
   <div class="card"><input id="cli-search" placeholder="Search clients..." oninput="renderCL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="clist"></div></div>
@@ -1117,8 +1118,58 @@ async function loadOlder(tab){
     syncBadge("Synced",true);
   }catch(e){syncBadge("Error",false);if(btn){btn.disabled=false;btn.textContent="Load older records";}}
 }
-function toggleCF(){var f=document.getElementById("cform");if(f.style.display==="none"){["clid","cln","clp","cle","cla","clnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("cform-title").textContent="New Client";f.style.display="block";}else{f.style.display="none";}}
-function editClient(id){var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}if(!c)return;document.getElementById("clid").value=c.id;document.getElementById("cln").value=c.name||"";document.getElementById("clp").value=c.phone||"";document.getElementById("cle").value=c.email||"";document.getElementById("cla").value=c.address||"";document.getElementById("clnotes").value=c.notes||"";document.getElementById("cform-title").textContent="Edit Client";document.getElementById("cform").style.display="block";}
+function findClientHistory(c){
+  var np=normPhone(c.phone),ne=(c.email||"").toLowerCase().trim();
+  var matchedEsts=ests.filter(function(e){
+    var ep=normPhone(e.phone),ee=(e.email||"").toLowerCase().trim();
+    return(np&&ep&&ep===np)||(ne&&ee&&ee===ne);
+  });
+  var matchedInvs=invs.filter(function(i){
+    var ip=normPhone(i.phone),ie=(i.email||"").toLowerCase().trim();
+    return(np&&ip&&ip===np)||(ne&&ie&&ie===ne);
+  });
+  return{ests:matchedEsts,invs:matchedInvs};
+}
+function renderClientHistory(c){
+  var box=document.getElementById("cl-history");
+  if(!box)return;
+  if(!c.phone&&!c.email){box.style.display="none";box.innerHTML="";return;}
+  var h=findClientHistory(c);
+  var rows=h.ests.map(function(e){return{ts:e.created,html:'<div class="li" style="padding:6px 8px"><div onclick="editCL_openEst(\''+e.id+'\')" style="cursor:pointer;flex:1"><div class="lin" style="font-size:12px">'+esc(e.estNum||"")+'</div><div class="lim">'+fmt(e.total)+" · "+new Date(e.created).toLocaleDateString()+'</div></div><span class="badge '+e.status+'" style="font-size:10px">'+e.status+"</span></div>"};})
+    .concat(h.invs.map(function(i){return{ts:i.created,html:'<div class="li" style="padding:6px 8px"><div onclick="editCL_openInv(\''+i.invNum+'\')" style="cursor:pointer;flex:1"><div class="lin" style="font-size:12px">'+esc(i.invNum||"")+'</div><div class="lim">'+fmt(i.total)+" · "+new Date(i.created).toLocaleDateString()+'</div></div><span class="badge '+(i.paid?"paid":"unpaid")+'" style="font-size:10px">'+(i.paid?"paid":"unpaid")+"</span></div>"};}))
+    .sort(function(a,b){return b.ts-a.ts;});
+  box.style.display="block";
+  var listHtml=rows.length?rows.map(function(r){return r.html;}).join(""):'<div style="font-size:12px;color:var(--muted);padding:4px 0">No recent estimates or invoices loaded for this client.</div>';
+  box.innerHTML='<label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Estimate & Invoice History</label>'+listHtml+'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><div style="font-size:11px;color:var(--muted)">Only shows records loaded in the last 90 days by default</div><button type="button" class="bs2" style="padding:4px 9px;font-size:11px;white-space:nowrap" onclick="loadClientFullHistory(\''+c.id+'\')">See Full History</button></div>';
+}
+async function loadClientFullHistory(clientId){
+  var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===clientId){c=clients[i];break}}
+  if(!c)return;
+  if(!c.phone&&!c.email){toast("No phone or email on file to search by");return}
+  toast("Loading full history\u2026");
+  try{
+    var filters=[];
+    if(c.phone)filters.push("phone.eq."+encodeURIComponent(c.phone));
+    if(c.email)filters.push("email.eq."+encodeURIComponent(c.email));
+    var orParam="or=("+filters.join(",")+")";
+    var headers={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
+    var[er,ir]=await Promise.all([
+      fetch(SURL+"/rest/v1/fir_estimates?select=*&"+orParam,{headers:headers}),
+      fetch(SURL+"/rest/v1/fir_invoices?select=*&"+orParam,{headers:headers})
+    ]);
+    var newEsts=(await er.json()).map(db2e);
+    var newInvs=(await ir.json()).map(db2i);
+    var addedE=0,addedI=0;
+    newEsts.forEach(function(ne){if(!ests.some(function(e){return e.id===ne.id})){ests.push(ne);addedE++;}});
+    newInvs.forEach(function(ni){if(!invs.some(function(i){return i.id===ni.id})){invs.push(ni);addedI++;}});
+    renderClientHistory(c);
+    toast((addedE+addedI)?("Loaded "+(addedE+addedI)+" older record"+((addedE+addedI)===1?"":"s")):"No additional history found");
+  }catch(err){console.error("Full history load failed:",err);toast("Couldn't load full history \u2014 check connection");}
+}
+function editCL_openEst(id){toggleCF();openEF(id);sv("est");}
+function editCL_openInv(invNum){toggleCF();document.getElementById("inv-search").value=invNum;renderIL();sv("inv");}
+function toggleCF(){var f=document.getElementById("cform");if(f.style.display==="none"){["clid","cln","clp","cle","cla","clnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("cform-title").textContent="New Client";var hb=document.getElementById("cl-history");if(hb){hb.style.display="none";hb.innerHTML="";}f.style.display="block";}else{f.style.display="none";}}
+function editClient(id){var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}if(!c)return;document.getElementById("clid").value=c.id;document.getElementById("cln").value=c.name||"";document.getElementById("clp").value=c.phone||"";document.getElementById("cle").value=c.email||"";document.getElementById("cla").value=c.address||"";document.getElementById("clnotes").value=c.notes||"";document.getElementById("cform-title").textContent="Edit Client";document.getElementById("cform").style.display="block";renderClientHistory(c);}
 function toggleEF(){var f=document.getElementById("eform");if(f.style.display==="none"){["exid","exa","exn"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("exc").selectedIndex=0;document.getElementById("exd").value=new Date().toISOString().split("T")[0];document.getElementById("eform-title").textContent="New Expense";f.style.display="block";}else{f.style.display="none";}}
 function editExpense(id){var x=null;for(var i=0;i<exps.length;i++){if(exps[i].id===id){x=exps[i];break}}if(!x)return;document.getElementById("exid").value=x.id;document.getElementById("exd").value=x.date||"";document.getElementById("exa").value=x.amount||"";document.getElementById("exc").value=x.cat||"Materials";document.getElementById("exn").value=x.desc||"";document.getElementById("eform-title").textContent="Edit Expense";document.getElementById("eform").style.display="block";}
 async function saveClient(){var name=document.getElementById("cln").value.trim();if(!name){toast("Name required");return}var id=document.getElementById("clid").value;var phone=document.getElementById("clp").value;var email=document.getElementById("cle").value;var address=document.getElementById("cla").value;var notes=document.getElementById("clnotes").value;if(id){var existing=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){existing=clients[i];break}}if(existing){existing.name=name;existing.phone=phone;existing.email=email;existing.address=address;existing.notes=notes;await qUp("fir_clients",c2db(existing));}}else{var dup=findClientMatch(phone,email,name);if(dup){if(!confirm("This looks like an existing client: "+(dup.name||"")+". Open that record instead of creating a new one?")){return}document.getElementById("cform").style.display="none";editClient(dup.id);return;}var nc={id:uid(),name:name,phone:phone,email:email,address:address,notes:notes,created:Date.now()};clients.push(nc);await qUp("fir_clients",c2db(nc));}persistLocal();["clid","cln","clp","cle","cla","clnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("cform").style.display="none";renderCL();toast("Client saved!")}
