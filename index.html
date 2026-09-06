@@ -1008,6 +1008,14 @@ function findDuplicateLead(phone,email,excludeId){
     if(ne&&oe&&oe===ne)return other;
   }
   return null;
+}function leadJobStatus(leadId){
+  var order={approved:1,scheduled:2,in_progress:3,complete:4};
+  var best=null,bestOrder=0;
+  for(var i=0;i<ests.length;i++){
+    var e=ests[i];
+    if(e.leadId===leadId&&order[e.status]&&order[e.status]>bestOrder){bestOrder=order[e.status];best=e;}
+  }
+  return best;
 }function renderLL(){
   var q=(document.getElementById("lead-search")||{}).value||"";
   var hideLost=!!ls("fir:hideLostLeads");
@@ -1027,7 +1035,10 @@ function findDuplicateLead(phone,email,excludeId){
     var returningLine=returningClient?('<div class="lim" style="color:#0a7a3c">↩ Returning client: '+esc(returningClient.name||"")+'</div>'):"";
     var visitLine=l.visitDate?('<div class="lim" style="color:#0c5460">📅 Visit: '+new Date(l.visitDate).toLocaleDateString([],{month:"short",day:"numeric"})+" "+new Date(l.visitDate).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+(l.zohoSyncOk===false?' <span style="color:#b8860b;font-weight:700">\u26a0 sync failed</span> <button class="bs2" style="padding:1px 7px;font-size:10px" onclick="event.stopPropagation();retryLeadVisitSync(\''+l.id+'\')">Retry</button>':' <button class="bs2" style="padding:1px 7px;font-size:10px" onclick="event.stopPropagation();cancelVisit(\''+l.id+'\')">Cancel</button>')+"</div>"):"";
     var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
-    return"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span></div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+esc(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div>"+returningLine+dupLine+visitLine+"</div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(isOpen?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();openVisitModal('"+l.id+"')\">📅 "+(l.visitDate?"Reschedule":"Visit")+"</button>":"")+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
+    var js=leadJobStatus(l.id);
+    var jobBadge=js?('<span class="badge" style="background:#17a2b8;color:#fff;margin-left:7px">Job: '+esc(js.status.replace("_"," "))+'</span>'):"";
+    var showVisit=isOpen&&!js;
+    return"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span>"+jobBadge+"</div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+esc(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div>"+returningLine+dupLine+visitLine+"</div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(showVisit?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();openVisitModal('"+l.id+"')\">📅 "+(l.visitDate?"Reschedule":"Visit")+"</button>":"")+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
   }).join(""):q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>';
   var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
 }
@@ -1704,7 +1715,7 @@ function renderSched(){
     var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+esc(e.address):"")+'</div>'+jobInfo+'</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge '+e.status+'">'+e.status+"</span></div></div>";
     return{ts:e.schedDate,html:html};
   });
-  var peRows=personalEvents.map(function(p){
+  var peRows=personalEvents.filter(function(p){return(p.eventDate+(p.durationMin||60)*60000)>=Date.now();}).map(function(p){
     var d=new Date(p.eventDate);
     var dayLabel=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
     var timeLabel=fmtRange(p.eventDate,p.durationMin||60);
@@ -1712,7 +1723,7 @@ function renderSched(){
     var html='<div class="li" style="flex-wrap:wrap;gap:6px;border-left:3px solid #6f42c1"><div style="flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+'</div><div class="lim">'+esc(p.title||"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+'<span class="badge" style="background:#6f42c1;color:#fff">personal</span><button class="bs2" style="padding:2px 8px;font-size:11px" onclick="deletePersonalEvent(\''+p.id+'\')">Delete</button></div></div>';
     return{ts:p.eventDate,html:html};
   });
-  var visitRows=leads.filter(function(l){return!!l.visitDate;}).map(function(l){
+  var visitRows=leads.filter(function(l){return!!l.visitDate&&(l.visitDate+(l.visitDurationMin||60)*60000)>=Date.now();}).map(function(l){
     var d=new Date(l.visitDate);
     var dayLabel=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
     var timeLabel=fmtRange(l.visitDate,l.visitDurationMin||60);
