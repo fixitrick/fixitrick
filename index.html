@@ -738,8 +738,13 @@ function openEF(id){mats=[];labs=[];photos=[];pendingPhotoDeletes=[];document.ge
     // Show scheduled date if set
     var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}
     var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}
-    document.getElementById("btn-email").style.display="";
-    if(e.emailedAt){showEmailStatus(e.emailedAt,e.emailedTo);}
+    if(e.status==="invoiced"){
+      document.getElementById("btn-email").style.display="none";
+      var ed2=document.getElementById("email-display");if(ed2)ed2.style.display="none";
+    }else{
+      document.getElementById("btn-email").style.display="";
+      if(e.emailedAt){showEmailStatus(e.emailedAt,e.emailedTo);}
+    }
     if(e.schedDate){showSchedDate(e.schedDate,e.zohoSyncOk);}}renderMats();renderLabs();calcT();sv("ef")}
 function updBtns(s){
   var sent=document.getElementById("btn-sent"),appr=document.getElementById("btn-appr"),decl=document.getElementById("btn-decl");
@@ -1330,9 +1335,9 @@ async function emailEst(){
   if(!e.email){toast("No email on file for this customer");return}
   var btn=document.getElementById("btn-email");
   var rbtn=document.getElementById("btn-resend");
-  btn.disabled=true;btn.textContent="Sending...";
-  if(rbtn){rbtn.disabled=true;rbtn.textContent="Sending...";}
   try{
+    if(btn){btn.disabled=true;btn.textContent="Sending...";}
+    if(rbtn){rbtn.disabled=true;rbtn.textContent="Sending...";}
     var r=await fetch(EMAIL_FN_URL,{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({docType:"estimate",id:id})});
     var j=await r.json();
     if(j.ok){
@@ -1349,7 +1354,7 @@ async function emailEst(){
       toast("Send failed \u2014 try again");
     }
   }catch(err){console.error(err);toast("Send failed \u2014 try again");}
-  btn.disabled=false;btn.textContent="Email to Customer";
+  if(btn){btn.disabled=false;btn.textContent="Email to Customer";}
   if(rbtn){rbtn.disabled=false;rbtn.textContent="Resend";}
 }
 function showEmailStatus(ts,to){
