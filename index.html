@@ -1161,12 +1161,13 @@ function renderClientHistory(c){
 async function loadClientFullHistory(clientId){
   var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===clientId){c=clients[i];break}}
   if(!c)return;
-  if(!c.phone&&!c.email){toast("No phone or email on file to search by");return}
+  var np=normPhone(c.phone),ne=(c.email||"").toLowerCase().trim();
+  if(!np&&!ne){toast("No phone or email on file to search by");return}
   toast("Loading full history\u2026");
   try{
     var filters=[];
-    if(c.phone)filters.push("phone.eq."+encodeURIComponent(c.phone));
-    if(c.email)filters.push("email.eq."+encodeURIComponent(c.email));
+    if(np)filters.push("phone_norm.eq."+encodeURIComponent(np));
+    if(ne)filters.push("email_norm.eq."+encodeURIComponent(ne));
     var orParam="or=("+filters.join(",")+")";
     var headers={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN};
     var[er,ir]=await Promise.all([
