@@ -984,7 +984,7 @@ function convertLead(id){
   document.getElementById("fcp").value=l.phone||"";
   document.getElementById("fce").value=l.email||"";
   document.getElementById("fca").value=l.address||"";
-  document.getElementById("fjd").value=l.jobDesc||"";
+  document.getElementById("fjd").value=existingEst?"":(l.jobDesc||"");
   document.getElementById("fleadid").value=id;
   toast("Estimate started from lead \u2014 status updates once emailed");
 }
