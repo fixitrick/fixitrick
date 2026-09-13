@@ -925,8 +925,14 @@ async function markStat(stat){
   document.getElementById("fstat").value=stat;
   updBtns(stat);
   if(stat==="declined"&&leadId){
-    await updateLeadStatus(leadId,"lost",true);
-    toast("Status: declined \u2014 lead marked lost");
+    var stillOpen=false;
+    for(var i=0;i<ests.length;i++){if(ests[i].leadId===leadId&&ests[i].id!==id&&ests[i].status!=="declined"){stillOpen=true;break}}
+    if(!stillOpen){
+      await updateLeadStatus(leadId,"lost",true);
+      toast("Status: declined \u2014 lead marked lost");
+    }else{
+      toast("Status: declined");
+    }
   }else{
     toast("Status: "+stat);
   }
@@ -967,9 +973,11 @@ function convertLead(id){
   var existingEst=null;
   for(var i=0;i<ests.length;i++){if(ests[i].leadId===id&&ests[i].status!=="declined"){existingEst=ests[i];break}}
   if(existingEst){
-    openEF(existingEst.id);
-    toast("Opening existing estimate");
-    return;
+    if(confirm("This lead has an open estimate ("+(existingEst.estNum||"")+"). Open it instead of starting a new one?")){
+      openEF(existingEst.id);
+      toast("Opening existing estimate");
+      return;
+    }
   }
   openEF(null);
   document.getElementById("fcn").value=l.name||"";
@@ -1343,7 +1351,15 @@ async function emailEst(){
     if(j.ok){
       e.emailedAt=j.emailedAt;e.emailedTo=j.emailedTo;
       var justQuoted=false;
-      if(e.status==="draft"){e.status="sent";document.getElementById("fstat").value="sent";updBtns("sent");if(e.leadId){await updateLeadStatus(e.leadId,"quoted",true);justQuoted=true;}}
+      if(e.status==="draft"){e.status="sent";document.getElementById("fstat").value="sent";updBtns("sent");
+        if(e.leadId){
+          var ld=null;for(var li=0;li<leads.length;li++){if(leads[li].id===e.leadId){ld=leads[li];break}}
+          if(!ld||(ld.status!=="won"&&ld.status!=="lost")){
+            await updateLeadStatus(e.leadId,"quoted",true);
+            justQuoted=true;
+          }
+        }
+      }
       await qUp("fir_estimates",e2db(e));
       persistLocal();
       showEmailStatus(j.emailedAt,j.emailedTo);
