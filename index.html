@@ -752,7 +752,8 @@ function updBtns(s){
   var startnow=document.getElementById("btn-startnow");
   sent.style.display=s==="draft"?"":"none";
   appr.style.display=s==="sent"?"":"none";
-  decl.style.display=s==="sent"?"":"none";
+  decl.style.display=(s==="sent"||s==="approved"||s==="scheduled"||s==="in_progress")?"":"none";
+  if(decl)decl.textContent=s==="sent"?"Declined":"Cancel Job";
   sched.style.display=(s==="approved"||s==="scheduled")?"":"none";
   if(sched)sched.textContent=s==="scheduled"?"Reschedule":"Scheduled";
   if(startnow)startnow.style.display=s==="approved"?"":"none";
@@ -915,6 +916,9 @@ async function markStat(stat){
   var leadId=null,hadSchedDate=false;
   for(var i=0;i<ests.length;i++){
     if(ests[i].id===id){
+      if(stat==="declined"&&(ests[i].status==="approved"||ests[i].status==="scheduled"||ests[i].status==="in_progress")){
+        if(!confirm(ests[i].schedDate?"Cancel this job? This removes it from your calendar and can't be undone.":"Cancel this job? This can't be undone."))return;
+      }
       hadSchedDate=!!ests[i].schedDate;
       ests[i].status=stat;
       if(stat==="declined"&&hadSchedDate){ests[i].schedDate=null;}
