@@ -524,7 +524,7 @@ async function load(){
     var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rx=await fetch(SURL+"/rest/v1/fir_expenses?select=*&order=created_at.asc&created_at=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&"+leadOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
-    var rp=await fetch(SURL+"/rest/v1/fir_personal_events?select=*&order=event_date.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    var rp=await fetch(SURL+"/rest/v1/fir_personal_events?select=*&order=event_date.asc&event_date=gte."+cutoff,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rs=await fetch(SURL+"/rest/v1/fir_settings?id=eq.main",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     ests=(await re.json()).map(db2e);
     invs=(await ri.json()).map(db2i);
