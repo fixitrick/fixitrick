@@ -912,10 +912,12 @@ async function saveEst(){var d=getFormData(),isNew=!document.getElementById("fei
 async function markStat(stat){
   var id=document.getElementById("feid").value;
   if(!id){toast("Save first");return}
-  var leadId=null;
+  var leadId=null,hadSchedDate=false;
   for(var i=0;i<ests.length;i++){
     if(ests[i].id===id){
+      hadSchedDate=!!ests[i].schedDate;
       ests[i].status=stat;
+      if(stat==="declined"&&hadSchedDate){ests[i].schedDate=null;}
       leadId=ests[i].leadId;
       await qUp("fir_estimates",e2db(ests[i]));
       break;
@@ -924,14 +926,21 @@ async function markStat(stat){
   persistLocal();
   document.getElementById("fstat").value=stat;
   updBtns(stat);
+  if(stat==="declined"&&hadSchedDate){
+    try{
+      var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});
+      var zj=await zr.json();
+      if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
+    }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}
+  }
   if(stat==="declined"&&leadId){
     var stillOpen=false;
     for(var i=0;i<ests.length;i++){if(ests[i].leadId===leadId&&ests[i].id!==id&&ests[i].status!=="declined"){stillOpen=true;break}}
     if(!stillOpen){
       await updateLeadStatus(leadId,"lost",true);
-      toast("Status: declined \u2014 lead marked lost");
+      toast("Status: declined \u2014 lead marked lost"+(hadSchedDate?" \u2014 calendar event removed":""));
     }else{
-      toast("Status: declined");
+      toast("Status: declined"+(hadSchedDate?" \u2014 calendar event removed":""));
     }
   }else{
     toast("Status: "+stat);
