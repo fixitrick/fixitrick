@@ -1491,11 +1491,19 @@ function renderCalendarContext(dt,candTs,candDur,items){
   return html;
 }
 function fmtRange(ts,durationMin){
+  if(durationMin>=1320)return "All day";
   var start=new Date(ts),end=new Date(ts+durationMin*60000);
   return start.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})+"\u2013"+end.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
 }
 function setDuration(prefix,mins){
   document.getElementById(prefix+"-duration").value=mins;
+  if(prefix==="sched")updateSchedContext();
+  else if(prefix==="visit")updateVisitContext();
+  else updatePeContext();
+}
+function setAllDay(prefix){
+  document.getElementById(prefix+"-time").value="00:00";
+  document.getElementById(prefix+"-duration").value=1320;
   if(prefix==="sched")updateSchedContext();
   else if(prefix==="visit")updateVisitContext();
   else updatePeContext();
@@ -1845,7 +1853,7 @@ function renderSched(){
         <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',90)">1.5h</button>
         <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',120)">2h</button>
         <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',240)">Half day</button>
-        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setDuration('pe',480)">Full day</button>
+        <button type="button" class="bs2" style="padding:4px 9px;font-size:11px" onclick="setAllDay('pe')">All day</button>
       </div>
       <input type="number" id="pe-duration" min="5" step="5" value="60" oninput="updatePeContext()" placeholder="Custom minutes" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);box-sizing:border-box">
     </div>
