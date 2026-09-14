@@ -430,6 +430,12 @@ async function flushQueue(){
         var zj=await zr.json();
         if(!zr.ok||!zj.ok){throw new Error("Zoho delete retry failed: "+((zj&&zj.error)||zr.status));}
       }
+      else if(item.op==="zoho-lead-visit"){
+        var zvr=await fetch(SURL+"/functions/v1/zoho-lead-visit",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify(item.data)});
+        var zvj=await zvr.json();
+        if(!zvr.ok||!zvj.ok){throw new Error("Zoho visit retry failed: "+((zvj&&zvj.error)||zvr.status));}
+        for(var li=0;li<leads.length;li++){if(leads[li].id===item.data.leadId){leads[li].zohoSyncOk=true;break}}
+      }
       else{await sbDel(item.table,item.data);}
       pendingQueue=pendingQueue.filter(function(x){return x.qid!==item.qid});
       qSave(pendingQueue);
