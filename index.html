@@ -116,6 +116,7 @@ textarea{resize:vertical;min-height:64px}
   <button class="nb" onclick="sv('exp')">Expenses</button>
   <button class="nb" onclick="sv('leads')">Leads</button>
   <button class="nb" onclick="sv('set')">Settings</button>
+  <button class="nb" onclick="sv('coi')">Insurance</button>
   <button class="nb" onclick="openHowTo('')">How-To</button>
 </nav>
 <div id="v-db" class="view on">
@@ -276,6 +277,18 @@ textarea{resize:vertical;min-height:64px}
     <div class="ct" style="color:#721c24">Danger Zone</div>
     <p style="font-size:12px;color:#555;margin:0 0 10px">Permanently deletes all estimates, invoices, clients, leads, and expenses, and resets estimate/invoice numbering back to 001. Your business info and other settings are not affected.</p>
     <button class="bs2" style="background:#dc3545;color:#fff;border-color:#dc3545" onclick="clearAllData()">Clear All Data</button>
+  </div>
+</div>
+<div id="v-coi" class="view">
+  <div class="sh"><h2>Insurance</h2></div>
+  <div class="card">
+    <div class="ct">Certificate of Insurance</div>
+    <p style="font-size:12px;color:#555;margin:0 0 10px">Upload your COI once (PDF), then pull it up any time to show or send to a customer.</p>
+    <div id="coi-current" style="display:none;margin-bottom:10px">
+      <a id="coi-link" href="#" target="_blank" class="bp" style="display:inline-block;text-decoration:none;text-align:center">View / Download Certificate</a>
+    </div>
+    <input type="file" accept="application/pdf" id="coi-file" style="display:none" onchange="handleCoiUpload(event)">
+    <button class="bs2" onclick="document.getElementById('coi-file').click()">Upload / Replace Certificate (PDF)</button>
   </div>
 </div>
 </div>
@@ -555,11 +568,11 @@ function sv(view){
   document.querySelectorAll(".view").forEach(function(v){v.classList.remove("on")});
   document.querySelectorAll(".nb").forEach(function(b){b.classList.remove("on")});
   var el=document.getElementById("v-"+view);if(el)el.classList.add("on");
-  var map={db:0,reports:1,est:2,ef:2,sched:3,inv:4,cli:5,exp:6,leads:7,set:8};
+  var map={db:0,reports:1,est:2,ef:2,sched:3,inv:4,cli:5,exp:6,leads:7,set:8,coi:9};
   var btns=document.querySelectorAll(".nb");
   if(map[view]!==undefined)btns[map[view]].classList.add("on");
   if(view==="db")renderDB();else if(view==="reports")renderReports();else if(view==="est")renderEL();else if(view==="sched")renderSched();else if(view==="inv")renderIL();
-  else if(view==="cli")renderCL();else if(view==="exp")renderXL();else if(view==="leads")renderLL();else if(view==="set")loadSet();
+  else if(view==="cli")renderCL();else if(view==="exp")renderXL();else if(view==="leads")renderLL();else if(view==="set")loadSet();else if(view==="coi")loadCoi();
   window.scrollTo(0,0);
 }
 function renderDB(){
@@ -714,6 +727,8 @@ async function delClient(id){if(!confirm("Delete this client? This can't be undo
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"editExpense('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>";var older=document.getElementById("exp-older");if(older)older.style.display=expAllLoaded?"none":"block";}
 async function delExp(id){if(!confirm("Delete this expense? This can't be undone."))return;exps=exps.filter(function(e){return e.id!==id});renderXL();toast("Expense deleted");var ok=await qDel("fir_expenses",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function loadSet(){document.getElementById("sb").value=S.biz||"";document.getElementById("sp").value=S.phone||"";document.getElementById("se").value=S.email||"";document.getElementById("sw").value=S.web||"";document.getElementById("sr").value=(S.rate===undefined||S.rate===null)?100:S.rate;document.getElementById("sm").value=(S.markup===undefined||S.markup===null)?20:S.markup;document.getElementById("st").value=S.tax||0;document.getElementById("spt").value=S.terms||"";document.getElementById("sev").value=(S.valid===undefined||S.valid===null)?30:S.valid;document.getElementById("sid").value=(S.due===undefined||S.due===null)?30:S.due;document.getElementById("sne").value=(S.nextEst===undefined||S.nextEst===null)?1:S.nextEst;document.getElementById("sni").value=(S.nextInv===undefined||S.nextInv===null)?1:S.nextInv}
+function loadCoi(){var link=document.getElementById("coi-link");var box=document.getElementById("coi-current");if(S.coiUrl){box.style.display="block";link.href=S.coiUrl}else{box.style.display="none"}}
+async function handleCoiUpload(evt){var file=evt.target.files[0];evt.target.value="";if(!file)return;if(file.type!=="application/pdf"){toast("Please choose a PDF file");return}var path="coi/certificate-of-insurance.pdf";try{var up=await fetch(SURL+"/storage/v1/object/fir-photos/"+path,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/pdf","x-upsert":"true"},body:file});if(!up.ok){toast("Certificate upload failed");console.error(await up.text());return}S.coiUrl=SURL+"/storage/v1/object/public/fir-photos/"+path+"?v="+Date.now();var ok=await qUp("fir_settings",{id:"main",data:Object.assign({},S)});persistLocal();loadCoi();toast(ok?"Certificate uploaded":"Saved locally — will sync when back online")}catch(e){toast("Certificate upload failed");console.error(e)}}
 async function saveSettings(){
   S.biz=document.getElementById("sb").value||"FixItRick";
   S.phone=document.getElementById("sp").value;
