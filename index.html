@@ -934,20 +934,18 @@ async function saveEst(){var d=getFormData(),isNew=!document.getElementById("fei
 async function markStat(stat){
   var id=document.getElementById("feid").value;
   if(!id){toast("Save first");return}
+  var d=getFormData();
+  var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
   var leadId=null,hadSchedDate=false;
-  for(var i=0;i<ests.length;i++){
-    if(ests[i].id===id){
-      if(stat==="declined"&&(ests[i].status==="approved"||ests[i].status==="scheduled"||ests[i].status==="in_progress")){
-        if(!confirm(ests[i].schedDate?"Cancel this job? This removes it from your calendar and can't be undone.":"Cancel this job? This can't be undone."))return;
-      }
-      hadSchedDate=!!ests[i].schedDate;
-      ests[i].status=stat;
-      if(stat==="declined"&&hadSchedDate){ests[i].schedDate=null;}
-      leadId=ests[i].leadId;
-      await qUp("fir_estimates",e2db(ests[i]));
-      break;
-    }
+  if(stat==="declined"&&(d.status==="approved"||d.status==="scheduled"||d.status==="in_progress")){
+    if(!confirm(d.schedDate?"Cancel this job? This removes it from your calendar and can't be undone.":"Cancel this job? This can't be undone."))return;
   }
+  hadSchedDate=!!d.schedDate;
+  d.status=stat;
+  if(stat==="declined"&&hadSchedDate){d.schedDate=null;}
+  leadId=d.leadId;
+  if(idx>=0)ests[idx]=d;else ests.push(d);
+  await qUp("fir_estimates",e2db(d));
   persistLocal();
   document.getElementById("fstat").value=stat;
   updBtns(stat);
@@ -1715,23 +1713,21 @@ async function confirmSched(){
   if(!dt){toast("Pick a date");return}
   var schedTs=new Date(dt+"T"+(tm||"08:00")).getTime();
   var zohoOk=true;
-  for(var i=0;i<ests.length;i++){
-    if(ests[i].id===id){
-      ests[i].status="scheduled";
-      ests[i].schedDate=schedTs;
-      ests[i].schedDurationMin=dur;
-      await qUp("fir_estimates",Object.assign(e2db(ests[i]),{sched_date:schedTs,sched_duration_min:dur}));
-      persistLocal();
-      try{
-        var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id,durationMin:dur})});
-        var zj=await zr.json();
-        if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
-      }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
-      ests[i].zohoSyncOk=zohoOk;
-      try{await sbUp("fir_estimates",Object.assign(e2db(ests[i]),{zoho_sync_ok:zohoOk}));}catch(e){}
-      break;
-    }
-  }
+  var d=getFormData();
+  var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
+  d.status="scheduled";
+  d.schedDate=schedTs;
+  d.schedDurationMin=dur;
+  if(idx>=0)ests[idx]=d;else ests.push(d);
+  await qUp("fir_estimates",Object.assign(e2db(d),{sched_date:schedTs,sched_duration_min:dur}));
+  persistLocal();
+  try{
+    var zr=await fetch(SURL+"/functions/v1/zoho-schedule-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({estimateId:id,durationMin:dur})});
+    var zj=await zr.json();
+    if(!zj.ok){console.error("Zoho sync failed:",zj.error);zohoOk=false;}
+  }catch(zerr){console.error("Zoho sync error:",zerr);zohoOk=false;}
+  d.zohoSyncOk=zohoOk;
+  try{await sbUp("fir_estimates",Object.assign(e2db(d),{zoho_sync_ok:zohoOk}));}catch(e){}
   document.getElementById("fstat").value="scheduled";
   closeSchedPicker();
   updBtns("scheduled");
