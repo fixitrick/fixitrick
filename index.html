@@ -837,6 +837,7 @@ async function getGuide(){
     document.getElementById("howto-guide-content").innerHTML='<div class="es">Generating guide...</div>';
     var r=await fetch(SURL+"/functions/v1/ai-proxy",{method:"POST",headers:{"Content-Type":"application/json","apikey":SKEY,"Authorization":"Bearer "+ATOKEN},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,messages:[{role:"user",content:"You are an experienced home repair pro. Give a practical how-to guide for this job: \""+jt+"\". Return ONLY valid JSON, no markdown fences:\n{\"tools\":[\"item\"],\"materials\":[\"item\"],\"steps\":[\"step\"],\"safety_notes\":[\"note\"],\"est_time\":\"e.g. 1-2 hours\"}\n\nBe specific and concise. 5-10 steps typical."}]})});
     var d=await r.json();
+    if(!r.ok||!d.content){throw new Error("AI proxy error ("+r.status+"): "+(d.error&&(d.error.message||d.error)||d.message||JSON.stringify(d)).toString().slice(0,300))}
     if(d.stop_reason==="max_tokens")throw new Error("Response was cut off \u2014 try a more specific job type");
     var raw=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("").replace(/```json|```/g,"").trim();
     var g=JSON.parse(raw);
@@ -882,6 +883,7 @@ async function askAboutPhoto(){
   try{
     var r=await fetch(SURL+"/functions/v1/ai-proxy",{method:"POST",headers:{"Content-Type":"application/json","apikey":SKEY,"Authorization":"Bearer "+ATOKEN},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:800,messages:howtoConvo})});
     var d=await r.json();
+    if(!r.ok||!d.content){throw new Error("AI proxy error ("+r.status+"): "+(d.error&&(d.error.message||d.error)||d.message||JSON.stringify(d)).toString().slice(0,300))}
     if(d.stop_reason==="max_tokens")throw new Error("Response was cut off");
     var answer=d.content.filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("");
     howtoConvo.push({role:"assistant",content:answer});
