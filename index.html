@@ -1558,6 +1558,24 @@ function rescheduleJob(id){
   if(document.getElementById("feid").value!==id){openEF(id);}
   openSchedPicker();
 }
+// Cancel Job shortcut: same reasoning as rescheduleJob() above, but simpler — markStat()
+// is a single awaitable call with its own built-in confirm() dialog and no separate
+// modal to reopen later, so this doesn't need the shared schedReturnView/scroll globals;
+// local variables are enough since everything resolves within one function call.
+async function cancelJob(id){
+  var returnScroll=window.scrollY||document.documentElement.scrollTop||0;
+  // Same guard as rescheduleJob(): don't reload the form (and lose live unsaved edits)
+  // if it's already showing the job being cancelled. markStat() also reads the form via
+  // getFormData(), per the same Sept 14, 2026 save-before-acting fix confirmSched() relies on.
+  if(document.getElementById("feid").value!==id){openEF(id);}
+  // markStat("declined") shows its own native confirm() dialog and simply returns if the
+  // user backs out — awaiting it either way, then always returning to the Schedule tab
+  // (where this button only ever appears), confirmed or not, so nothing is left stranded
+  // on the estimate form.
+  await markStat("declined");
+  sv("sched");
+  window.scrollTo(0,returnScroll);
+}
 function closeSchedPicker(){
   document.getElementById("sched-modal").style.display="none";
   if(schedReturnView){var v=schedReturnView;schedReturnView=null;sv(v);window.scrollTo(0,schedReturnScroll);}
@@ -1808,7 +1826,12 @@ function renderSched(){
     // would silently revert it — a path that was never reachable in the app before this button.
     var rescheduleBtn=e.status==="scheduled"?'<button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();rescheduleJob(\''+e.id+'\')">📅 Reschedule</button>':"";
     var jobInfo=(e.cat||e.desc)?('<div class="lim">'+(e.cat?esc(e.cat):"")+(e.cat&&e.desc?" · ":"")+(e.desc?esc(e.desc.slice(0,80))+(e.desc.length>80?"...":""):"")+'</div>'):"";
-    var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+mapLink(e.address):"")+'</div>'+jobInfo+'</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+rescheduleBtn+'<span class="badge" style="background:#17a2b8;color:#fff">job</span> <span class="badge '+e.status+'">'+e.status+"</span></div></div>";
+    // "scheduled" is redundant here — the job being on this tab already says that. "in_progress"
+    // isn't redundant (nothing else on this row distinguishes it from a plain scheduled job,
+    // since the border color doesn't either), so only that one still gets an explicit badge.
+    var statusBadge=e.status==="in_progress"?(' <span class="badge '+e.status+'">'+e.status+"</span>"):"";
+    var cancelBtn='<button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();cancelJob(\''+e.id+'\')">Cancel</button>';
+    var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+mapLink(e.address):"")+'</div>'+jobInfo+'</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+rescheduleBtn+'<span class="badge" style="background:#17a2b8;color:#fff">job</span>'+statusBadge+cancelBtn+'</div></div>';
     return{ts:e.schedDate,html:html};
   });
   var peRows=personalEvents.filter(function(p){return(p.eventDate+(p.durationMin||60)*60000)>=Date.now();}).map(function(p){
