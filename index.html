@@ -530,6 +530,30 @@ function uid(){return Math.random().toString(36).slice(2,9)}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function fmt(n){return"$"+(+(n)||0).toFixed(2)}
 function fmtN(n){return"EST-"+String(n).padStart(3,"0")}
+// Assigns a real, permanent estimate number exactly once, only when getFormData() had to
+// generate a preview one (see estNumIsPreview below) — increments and persists the counter
+// immediately, and syncs the hidden festnum field so a second action in the same session
+// (e.g. Email right after Schedule) sees the number as already assigned, not blank again.
+var estNumLock=null;
+async function ensureEstNum(d){
+  if(!d.estNumIsPreview)return d;
+  if(estNumLock){
+    // Another action already started assigning a number for this same not-yet-saved
+    // estimate (e.g. two buttons tapped in quick succession before either finished) — wait
+    // for that one instead of also incrementing the counter, so only one real number is
+    // ever handed out, and both actions end up saving under the same number.
+    await estNumLock;
+    var fn2=document.getElementById("festnum");
+    if(fn2&&fn2.value){d.estNum=fn2.value;d.estNumIsPreview=false;}
+    return d;
+  }
+  var release;estNumLock=new Promise(function(res){release=res;});
+  S.nextEst++;
+  await qUp("fir_settings",{id:"main",data:Object.assign({},S)});
+  var fn=document.getElementById("festnum");if(fn)fn.value=d.estNum;
+  release();estNumLock=null;
+  return d;
+}
 function fmtI(n){return"INV-"+String(n).padStart(3,"0")}
 function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.style.display="block";setTimeout(function(){t.style.display="none"},2200)}
 async function load(){
@@ -756,7 +780,21 @@ async function saveSettings(){
   persistLocal();
   toast(ok?"Settings saved and synced!":"Saved locally — will sync when back online");
 }
-function openEF(id){mats=[];labs=[];photos=[];pendingPhotoDeletes=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display="none";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";document.getElementById("fleadid").value="";var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}document.getElementById("btn-email").style.display="";addML();addLL();renderPhotos();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=(e.markupPct!==undefined&&e.markupPct!==null)?e.markupPct:S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";document.getElementById("fleadid").value=e.leadId||"";mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));photos=JSON.parse(JSON.stringify(e.photos||[]));if(!mats.length)addML();if(!labs.length)addLL();renderPhotos();updBtns(e.status);
+function openEF(id){mats=[];labs=[];photos=[];pendingPhotoDeletes=[];document.getElementById("ubox").style.display="none";document.getElementById("aistat").textContent="";document.getElementById("apiwarn").style.display="none";if(!id){document.getElementById("eftitle").textContent="New Estimate";["fcn","fcp","fce","fca","fjd","fnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("fjc").value="";document.getElementById("fmk").value=S.markup;document.getElementById("ftx").value=S.tax;document.getElementById("fdc").value=0;document.getElementById("fdep").value=0;document.getElementById("feid").value="";document.getElementById("fstat").value="draft";document.getElementById("festnum").value="";document.getElementById("fleadid").value="";var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}document.getElementById("btn-email").style.display="";addML();addLL();renderPhotos();["btn-sent","btn-appr","btn-decl","btn-inv"].forEach(function(b){document.getElementById(b).style.display="none"})}else{var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){e=ests[i];break}}if(!e)return;document.getElementById("eftitle").textContent=e.estNum||"Edit";document.getElementById("fcn").value=e.customer||"";document.getElementById("fcp").value=e.phone||"";document.getElementById("fce").value=e.email||"";document.getElementById("fca").value=e.address||"";document.getElementById("fjd").value=e.desc||"";document.getElementById("fjc").value=e.cat||"";document.getElementById("fmk").value=(e.markupPct!==undefined&&e.markupPct!==null)?e.markupPct:S.markup;document.getElementById("ftx").value=e.taxPct||0;document.getElementById("fdc").value=e.discount||0;document.getElementById("fdep").value=e.deposit||0;document.getElementById("fnotes").value=e.notes||"";document.getElementById("feid").value=e.id;document.getElementById("fstat").value=e.status;document.getElementById("festnum").value=e.estNum||"";document.getElementById("fleadid").value=e.leadId||"";
+  // Self-heal: an existing estimate can end up with no number at all if a photo was attached
+  // before it was ever saved (see handlePhoto()/ensureEstNum()) — opening it again is the one
+  // moment we're guaranteed to have its real record in hand, so fix it right here rather than
+  // requiring a hidden field no one can otherwise edit.
+  if(!e.estNum){
+    e.estNum=fmtN(S.nextEst);S.nextEst++;
+    document.getElementById("festnum").value=e.estNum;
+    document.getElementById("eftitle").textContent=e.estNum;
+    qUp("fir_estimates",e2db(e));
+    qUp("fir_settings",{id:"main",data:Object.assign({},S)});
+    persistLocal();
+    toast("This estimate had no number \u2014 assigned "+e.estNum);
+  }
+  mats=JSON.parse(JSON.stringify(e.mats||[]));labs=JSON.parse(JSON.stringify(e.labs||[]));photos=JSON.parse(JSON.stringify(e.photos||[]));if(!mats.length)addML();if(!labs.length)addLL();renderPhotos();updBtns(e.status);
     // Show scheduled date if set
     var sd=document.getElementById("sched-display");if(sd){sd.style.display="none";sd.textContent="";}
     var ed=document.getElementById("email-display");if(ed){ed.style.display="none";ed.textContent="";}
@@ -932,12 +970,19 @@ function calcT(){
   setEl("ttx",fmt(txa));setEl("tgr",fmt(tot));setEl("tdep",fmt(dep));setEl("tbal",fmt(bal));
   return{mt:mt,lt:lt,mka:mka,txa:txa,dc:dc,dep:dep,tot:tot,bal:bal};
 }
-function getFormData(){var t=calcT(),isNew=!document.getElementById("feid").value;var num=document.getElementById("festnum").value;if(!num&&isNew)num=fmtN(S.nextEst);var id=document.getElementById("feid").value||uid();var existing=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){existing=ests[i];break}}return{id:id,estNum:num,customer:document.getElementById("fcn").value,phone:document.getElementById("fcp").value,email:document.getElementById("fce").value,address:document.getElementById("fca").value,cat:document.getElementById("fjc").value,desc:document.getElementById("fjd").value,notes:document.getElementById("fnotes").value,markupPct:+(document.getElementById("fmk").value)||0,taxPct:+(document.getElementById("ftx").value)||0,discount:t.dc,deposit:t.dep,total:t.tot,balance:t.bal,status:document.getElementById("fstat").value||"draft",leadId:document.getElementById("fleadid").value||null,mats:JSON.parse(JSON.stringify(mats)),labs:JSON.parse(JSON.stringify(labs)),photos:JSON.parse(JSON.stringify(photos)),created:existing?existing.created:Date.now(),emailedAt:existing?existing.emailedAt:null,emailedTo:existing?existing.emailedTo:null,schedDate:existing?existing.schedDate:null,schedDurationMin:existing?existing.schedDurationMin:60,zohoSyncOk:existing?existing.zohoSyncOk:true}}
-async function saveEst(){var d=getFormData(),isNew=!document.getElementById("feid").value;if(isNew){d.estNum=fmtN(S.nextEst);S.nextEst++;}var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();var toCloud=Object.assign({},S);await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
+function getFormData(){var t=calcT();var num=document.getElementById("festnum").value;var numIsPreview=false;
+  // Previously required isNew (an empty feid) before generating a fallback number — but
+  // handlePhoto() can populate feid before Save is ever clicked (see below), which made this
+  // check wrongly skip number generation for a genuinely-unnumbered estimate. Checking whether
+  // a number exists yet, rather than whether an id exists yet, is the correct signal.
+  if(!num){num=fmtN(S.nextEst);numIsPreview=true;}
+  var id=document.getElementById("feid").value||uid();var existing=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){existing=ests[i];break}}return{id:id,estNum:num,estNumIsPreview:numIsPreview,customer:document.getElementById("fcn").value,phone:document.getElementById("fcp").value,email:document.getElementById("fce").value,address:document.getElementById("fca").value,cat:document.getElementById("fjc").value,desc:document.getElementById("fjd").value,notes:document.getElementById("fnotes").value,markupPct:+(document.getElementById("fmk").value)||0,taxPct:+(document.getElementById("ftx").value)||0,discount:t.dc,deposit:t.dep,total:t.tot,balance:t.bal,status:document.getElementById("fstat").value||"draft",leadId:document.getElementById("fleadid").value||null,mats:JSON.parse(JSON.stringify(mats)),labs:JSON.parse(JSON.stringify(labs)),photos:JSON.parse(JSON.stringify(photos)),created:existing?existing.created:Date.now(),emailedAt:existing?existing.emailedAt:null,emailedTo:existing?existing.emailedTo:null,schedDate:existing?existing.schedDate:null,schedDurationMin:existing?existing.schedDurationMin:60,zohoSyncOk:existing?existing.zohoSyncOk:true}}
+async function saveEst(){var d=getFormData();await ensureEstNum(d);var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();var toCloud=Object.assign({},S);await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();document.getElementById("feid").value=d.id;document.getElementById("festnum").value=d.estNum;document.getElementById("eftitle").textContent=d.estNum;updBtns(d.status);toast("Saved! ("+d.estNum+")");}
 async function markStat(stat){
   var id=document.getElementById("feid").value;
   if(!id){toast("Save first");return}
   var d=getFormData();
+  await ensureEstNum(d);
   var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
   var leadId=null,hadSchedDate=false;
   if(stat==="declined"&&(d.status==="approved"||d.status==="scheduled"||d.status==="in_progress")){
@@ -973,7 +1018,7 @@ async function markStat(stat){
   }
 }
 async function completeAndInvoice(){var btn=document.getElementById("btn-comp");if(btn){btn.disabled=true;btn.textContent="Working...";}await markStat("complete");await toInvoice();if(btn){btn.disabled=false;btn.textContent="Complete & Invoice";}}
-async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var d=getFormData();var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();persistLocal();var e=d;var due=new Date();due.setDate(due.getDate()+((S.due===undefined||S.due===null)?30:S.due));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";if(e.customer){await findOrCreateClient(e);}await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));if(e.leadId){await updateLeadStatus(e.leadId,"won",true);}var toCloud=Object.assign({},S);await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!"+(e.leadId?" Linked lead marked won.":""));sv("inv");}
+async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var d=getFormData();await ensureEstNum(d);var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();persistLocal();var e=d;var due=new Date();due.setDate(due.getDate()+((S.due===undefined||S.due===null)?30:S.due));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";if(e.customer){await findOrCreateClient(e);}await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));if(e.leadId){await updateLeadStatus(e.leadId,"won",true);}var toCloud=Object.assign({},S);await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!"+(e.leadId?" Linked lead marked won.":""));sv("inv");}
 async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;invs[i].paidAt=Date.now();await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
 
 function toggleLF(){var f=document.getElementById("lform");if(f.style.display==="none"){["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("lls").selectedIndex=0;document.getElementById("lform-title").textContent="New Lead";f.style.display="block";}else{f.style.display="none";}}
@@ -1386,6 +1431,7 @@ async function emailEst(){
   var id=document.getElementById("feid").value;
   if(!id){toast("Save first");return}
   var d=getFormData();
+  await ensureEstNum(d);
   var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
   if(idx>=0)ests[idx]=d;else ests.push(d);
   await qUp("fir_estimates",e2db(d));
@@ -1758,6 +1804,7 @@ async function confirmSched(){
   var schedTs=new Date(dt+"T"+(tm||"08:00")).getTime();
   var zohoOk=true;
   var d=getFormData();
+  await ensureEstNum(d);
   var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
   d.status="scheduled";
   d.schedDate=schedTs;
