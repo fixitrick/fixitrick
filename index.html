@@ -1118,15 +1118,17 @@ function findDuplicateLead(phone,email,excludeId){
   // Job outranks a scheduled visit, since once a job exists the visit is done
   // or folded into it. Lost is kept as its own terminal bucket either way.
   // Job states are split so each label means exactly what it says — "approved"
-  // (needs a date picked) is genuinely different from "scheduled" (date's set)
-  // and "in_progress" (crew's there now). "complete" never reaches here — those
-  // leads are filtered out of `list` entirely, above.
+  // (needs a date picked) is genuinely different from "scheduled" (date's set),
+  // "in_progress" (crew's there now), and "complete" (done, not yet invoiced —
+  // this is the one state that means Rick needs to act, not the customer, so it
+  // gets its own bucket rather than falling through to the "waiting" default).
   if(l.status==="lost")return"lost";
   var js=leadJobStatus(l.id);
   if(js){
     if(js.status==="approved")return"job_needs_schedule";
     if(js.status==="scheduled")return"job_scheduled";
     if(js.status==="in_progress")return"job_in_progress";
+    if(js.status==="complete")return"job_ready_invoice";
   }
   if(l.visitDate)return"visit";
   if(l.status==="new")return"action";
@@ -1156,15 +1158,13 @@ function renderLL(){
   var q=(document.getElementById("lead-search")||{}).value||"";
   var hideLost=!!ls("fir:hideLostLeads");
   var hlEl=document.getElementById("lead-hide-lost");if(hlEl)hlEl.checked=hideLost;
-  var list=[].concat(leads).filter(function(l){
-    if(l.status==="won"||(hideLost&&l.status==="lost"))return false;
-    // A "complete" job is done — nothing left for Rick to do on this lead here.
-    // Normally invoicing (Complete & Invoice) marks it "won" right after, which already
-    // hides it, but this covers the gap if that second step gets interrupted.
-    var js=leadJobStatus(l.id);
-    if(js&&js.status==="complete")return false;
-    return true;
-  });
+  // Hides a lead only once it's "won" — which is set right after the client record is
+  // created (see findOrCreateClient / toInvoice) — so "gone from this list" and "client
+  // exists" happen at the same moment. Previously this also hid a lead the instant its
+  // job hit "complete", to close the gap where the app is interrupted between marking
+  // complete and finishing the invoice — Rick asked to drop that so there's no gap
+  // between what this list shows and what actually has a client record.
+  var list=[].concat(leads).filter(function(l){return l.status!=="won"&&(!hideLost||l.status!=="lost")});
   if(q){var ql=q.toLowerCase();list=list.filter(function(l){return(l.name||"").toLowerCase().includes(ql)||(l.jobDesc||"").toLowerCase().includes(ql)||(l.phone||"").toLowerCase().includes(ql);})}
 
   // Pull out leads that are genuinely waiting on Rick (status "new", nothing booked yet)
@@ -1175,8 +1175,8 @@ function renderLL(){
   var pinned=list.filter(leadNeedsAction).sort(function(a,b){return a.created-b.created;});
   var rest=list.filter(function(l){return !leadNeedsAction(l);});
 
-  var groupOrder={job_needs_schedule:0,job_scheduled:1,job_in_progress:2,visit:3,waiting:4,lost:5};
-  var groupLabels={job_needs_schedule:"Job needs scheduling",job_scheduled:"Job scheduled",job_in_progress:"Job in progress",visit:"Visit scheduled",waiting:"Waiting to hear back",lost:"Lost"};
+  var groupOrder={job_needs_schedule:0,job_scheduled:1,job_in_progress:2,job_ready_invoice:3,visit:4,waiting:5,lost:6};
+  var groupLabels={job_needs_schedule:"Job needs scheduling",job_scheduled:"Job scheduled",job_in_progress:"Job in progress",job_ready_invoice:"Ready to invoice",visit:"Visit scheduled",waiting:"Waiting to hear back",lost:"Lost"};
   rest=rest.sort(function(a,b){return(groupOrder[leadWorkflowGroup(a)]||0)-(groupOrder[leadWorkflowGroup(b)]||0)||(b.created-a.created)});
 
   var groupCounts={};rest.forEach(function(l){var g=leadWorkflowGroup(l);groupCounts[g]=(groupCounts[g]||0)+1;});
