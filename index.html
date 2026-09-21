@@ -622,8 +622,10 @@ function renderDB(){
   var st={};ests.forEach(function(e){st[e.status]=(st[e.status]||0)+1});
   document.getElementById("dpipe").innerHTML=Object.keys(st).map(function(k){return"<span class=\"badge "+k+"\">"+k+"</span> <strong>"+st[k]+"</strong>"}).join("<br>");
 
-  // New leads awaiting first contact
-  var newLeads=leads.filter(function(l){return l.status==="new"}).sort(function(a,b){return a.created-b.created});
+  // Same definition as the Leads tab's "Awaiting your action" section — a lead only
+  // shows here if it genuinely needs Rick's attention (see leadNeedsAction), not just
+  // because its status happens to say "new". Keeps the two views from disagreeing.
+  var newLeads=leads.filter(leadNeedsAction).sort(function(a,b){return a.created-b.created});
   var followSec=document.getElementById("followup-section");
   followSec.style.display="block";
   document.getElementById("followup-list").innerHTML=newLeads.length?newLeads.map(function(l){
@@ -1109,13 +1111,28 @@ function findDuplicateLead(phone,email,excludeId){
     if(e.leadId===leadId&&order[e.status]&&order[e.status]>bestOrder){bestOrder=order[e.status];best=e;}
   }
   return best;
-}function leadNeedsAction(l){
-  // Open lead with nothing in motion yet: no visit on the calendar, no job started.
-  // This is the set that's genuinely waiting on Rick, vs. waiting on a future
-  // visit/job that's already scheduled.
-  var isOpen=l.status!=="won"&&l.status!=="lost";
-  return isOpen&&!leadJobStatus(l.id)&&!l.visitDate;
+}function leadWorkflowGroup(l){
+  // Single source of truth for "what's actually going on with this lead" —
+  // independent of the raw new/contacted/quoted dropdown, which is a pipeline
+  // label (for reports/records) and was never meant to answer that question.
+  // Job outranks a scheduled visit, since once a job exists the visit is done
+  // or folded into it. Lost is kept as its own terminal bucket either way.
+  // Job states are split so each label means exactly what it says — "approved"
+  // (needs a date picked) is genuinely different from "scheduled" (date's set)
+  // and "in_progress" (crew's there now). "complete" never reaches here — those
+  // leads are filtered out of `list` entirely, above.
+  if(l.status==="lost")return"lost";
+  var js=leadJobStatus(l.id);
+  if(js){
+    if(js.status==="approved")return"job_needs_schedule";
+    if(js.status==="scheduled")return"job_scheduled";
+    if(js.status==="in_progress")return"job_in_progress";
+  }
+  if(l.visitDate)return"visit";
+  if(l.status==="new")return"action";
+  return"waiting";// contacted or quoted, nothing booked yet — waiting on them, not you
 }
+function leadNeedsAction(l){return leadWorkflowGroup(l)==="action";}
 function renderLeadRow(l){
   var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
   var isOpen=l.status!=="won"&&l.status!=="lost";
@@ -1139,19 +1156,30 @@ function renderLL(){
   var q=(document.getElementById("lead-search")||{}).value||"";
   var hideLost=!!ls("fir:hideLostLeads");
   var hlEl=document.getElementById("lead-hide-lost");if(hlEl)hlEl.checked=hideLost;
-  var statOrder={new:0,contacted:1,quoted:2,won:3,lost:4};
-  var list=[].concat(leads).filter(function(l){return l.status!=="won"&&(!hideLost||l.status!=="lost")});
+  var list=[].concat(leads).filter(function(l){
+    if(l.status==="won"||(hideLost&&l.status==="lost"))return false;
+    // A "complete" job is done — nothing left for Rick to do on this lead here.
+    // Normally invoicing (Complete & Invoice) marks it "won" right after, which already
+    // hides it, but this covers the gap if that second step gets interrupted.
+    var js=leadJobStatus(l.id);
+    if(js&&js.status==="complete")return false;
+    return true;
+  });
   if(q){var ql=q.toLowerCase();list=list.filter(function(l){return(l.name||"").toLowerCase().includes(ql)||(l.jobDesc||"").toLowerCase().includes(ql)||(l.phone||"").toLowerCase().includes(ql);})}
 
-  // Pull out leads that are genuinely waiting on Rick (no visit booked, no job started yet)
+  // Pull out leads that are genuinely waiting on Rick (status "new", nothing booked yet)
   // into their own pinned section, oldest first so the most overdue one is at the top.
-  // Everything else keeps the existing status-grouped view below it.
+  // Everything else is grouped below by workflow state, not by the raw status dropdown —
+  // see leadWorkflowGroup for why (a "contacted" lead with a job already running has
+  // nothing in common with a "contacted" lead nobody's heard back from yet).
   var pinned=list.filter(leadNeedsAction).sort(function(a,b){return a.created-b.created;});
   var rest=list.filter(function(l){return !leadNeedsAction(l);});
-  rest=rest.sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
 
-  var groupCounts={};rest.forEach(function(l){groupCounts[l.status]=(groupCounts[l.status]||0)+1;});
-  var statLabels={new:"New",contacted:"Contacted",quoted:"Quoted",won:"Won",lost:"Lost"};
+  var groupOrder={job_needs_schedule:0,job_scheduled:1,job_in_progress:2,visit:3,waiting:4,lost:5};
+  var groupLabels={job_needs_schedule:"Job needs scheduling",job_scheduled:"Job scheduled",job_in_progress:"Job in progress",visit:"Visit scheduled",waiting:"Waiting to hear back",lost:"Lost"};
+  rest=rest.sort(function(a,b){return(groupOrder[leadWorkflowGroup(a)]||0)-(groupOrder[leadWorkflowGroup(b)]||0)||(b.created-a.created)});
+
+  var groupCounts={};rest.forEach(function(l){var g=leadWorkflowGroup(l);groupCounts[g]=(groupCounts[g]||0)+1;});
 
   // When nothing is pinned, say so explicitly rather than letting the section just
   // vanish — otherwise "caught up" and "page hasn't loaded" look identical at a glance.
@@ -1160,12 +1188,13 @@ function renderLL(){
 
   var lastGroup=null;
   var restHtml=rest.map(function(l){
-    // The list is already sorted by status group (statOrder above); this just makes that
-    // grouping visible with a small header the first time each status is encountered,
-    // instead of leaving same-status rows to blend together with no visual separation.
-    var topMargin=lastGroup===null?(pinned.length?"18px":"0"):"16px";
-    var groupHeader=(l.status!==lastGroup)?('<div class="ct" style="font-size:13px;color:var(--text);margin:'+topMargin+' 0 6px 4px">'+(statLabels[l.status]||l.status)+" \u00b7 "+groupCounts[l.status]+'</div>'):"";
-    lastGroup=l.status;
+    var g=leadWorkflowGroup(l);
+    // The list is already sorted by workflow group (groupOrder above); this just makes
+    // that grouping visible with a small header the first time each group is encountered,
+    // instead of leaving rows from different groups to blend together with no separation.
+    var topMargin=lastGroup===null?(pinnedHtml?"18px":"0"):"16px";
+    var groupHeader=(g!==lastGroup)?('<div class="ct" style="font-size:13px;color:var(--text);margin:'+topMargin+' 0 6px 4px">'+(groupLabels[g]||g)+" \u00b7 "+groupCounts[g]+'</div>'):"";
+    lastGroup=g;
     return groupHeader+renderLeadRow(l);
   }).join("");
 
