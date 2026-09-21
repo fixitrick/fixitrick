@@ -1109,41 +1109,67 @@ function findDuplicateLead(phone,email,excludeId){
     if(e.leadId===leadId&&order[e.status]&&order[e.status]>bestOrder){bestOrder=order[e.status];best=e;}
   }
   return best;
-}function renderLL(){
+}function leadNeedsAction(l){
+  // Open lead with nothing in motion yet: no visit on the calendar, no job started.
+  // This is the set that's genuinely waiting on Rick, vs. waiting on a future
+  // visit/job that's already scheduled.
+  var isOpen=l.status!=="won"&&l.status!=="lost";
+  return isOpen&&!leadJobStatus(l.id)&&!l.visitDate;
+}
+function renderLeadRow(l){
+  var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
+  var isOpen=l.status!=="won"&&l.status!=="lost";
+  var age=ageLabel(l.created);
+  var border=ageBorder(l.created);
+  var dup=findDuplicateLead(l.phone,l.email,l.id);
+  var dupLine=dup?('<div class="lim" style="color:#b8860b">⚠ Possible duplicate \u2014 matches another open lead: '+esc(dup.name||"")+' ('+dup.status+')</div>'):"";
+  var returningClient=findClientMatch(l.phone,l.email,l.name);
+  var returningLine=returningClient?('<div class="lim" style="color:#0a7a3c">↩ Returning client: '+esc(returningClient.name||"")+'</div>'):"";
+  var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
+  var js=leadJobStatus(l.id);
+  var jobBadge=js?('<span class="badge" style="background:#17a2b8;color:#fff;margin-left:7px">Job: '+esc(js.status.replace("_"," "))+'</span>'):"";
+  var visitBadge=(l.visitDate&&!js)?('<span class="badge" style="background:#0c5460;color:#fff;margin-left:7px">Visit: scheduled</span>'):"";
+  // Only offer first-time visit scheduling here — the Leads tab has no other way to do that.
+  // Once a visit exists, rescheduling (and canceling) happens exclusively on the Schedule tab,
+  // so this button no longer shows for an already-scheduled visit.
+  var showVisit=isOpen&&!js&&!l.visitDate;
+  return "<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span>"+jobBadge+visitBadge+"</div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+mapLink(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div>"+returningLine+dupLine+"</div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(showVisit?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();openVisitModal('"+l.id+"')\">📅 Visit</button>":"")+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
+}
+function renderLL(){
   var q=(document.getElementById("lead-search")||{}).value||"";
   var hideLost=!!ls("fir:hideLostLeads");
   var hlEl=document.getElementById("lead-hide-lost");if(hlEl)hlEl.checked=hideLost;
   var statOrder={new:0,contacted:1,quoted:2,won:3,lost:4};
   var list=[].concat(leads).filter(function(l){return l.status!=="won"&&(!hideLost||l.status!=="lost")});
-  list=list.sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
   if(q){var ql=q.toLowerCase();list=list.filter(function(l){return(l.name||"").toLowerCase().includes(ql)||(l.jobDesc||"").toLowerCase().includes(ql)||(l.phone||"").toLowerCase().includes(ql);})}
-  var groupCounts={};list.forEach(function(l){groupCounts[l.status]=(groupCounts[l.status]||0)+1;});
+
+  // Pull out leads that are genuinely waiting on Rick (no visit booked, no job started yet)
+  // into their own pinned section, oldest first so the most overdue one is at the top.
+  // Everything else keeps the existing status-grouped view below it.
+  var pinned=list.filter(leadNeedsAction).sort(function(a,b){return a.created-b.created;});
+  var rest=list.filter(function(l){return !leadNeedsAction(l);});
+  rest=rest.sort(function(a,b){return(statOrder[a.status]||0)-(statOrder[b.status]||0)||(b.created-a.created)});
+
+  var groupCounts={};rest.forEach(function(l){groupCounts[l.status]=(groupCounts[l.status]||0)+1;});
   var statLabels={new:"New",contacted:"Contacted",quoted:"Quoted",won:"Won",lost:"Lost"};
+
+  // When nothing is pinned, say so explicitly rather than letting the section just
+  // vanish — otherwise "caught up" and "page hasn't loaded" look identical at a glance.
+  // Skipped while searching, since an empty result there is about the search, not the day.
+  var pinnedHtml=pinned.length?('<div class="ct" style="font-size:13px;color:#dc3545;font-weight:700;margin:0 0 6px 4px">⚡ Awaiting your action \u00b7 '+pinned.length+'</div>'+pinned.map(renderLeadRow).join("")):(q?"":'<div class="ct" style="font-size:13px;color:#28a745;font-weight:700;margin:0 0 6px 4px">✓ Nothing waiting on you</div>');
+
   var lastGroup=null;
-  document.getElementById("llist").innerHTML=list.length?list.map(function(l){
-    var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
-    var isOpen=l.status!=="won"&&l.status!=="lost";
-    var age=ageLabel(l.created);
-    var border=ageBorder(l.created);
-    var dup=findDuplicateLead(l.phone,l.email,l.id);
-    var dupLine=dup?('<div class="lim" style="color:#b8860b">⚠ Possible duplicate \u2014 matches another open lead: '+esc(dup.name||"")+' ('+dup.status+')</div>'):"";
-    var returningClient=findClientMatch(l.phone,l.email,l.name);
-    var returningLine=returningClient?('<div class="lim" style="color:#0a7a3c">↩ Returning client: '+esc(returningClient.name||"")+'</div>'):"";
-    var ageColor=(Date.now()-l.created)>172800000?"color:#dc3545":(Date.now()-l.created)>86400000?"color:#fd7e14":"color:#28a745";
-    var js=leadJobStatus(l.id);
-    var jobBadge=js?('<span class="badge" style="background:#17a2b8;color:#fff;margin-left:7px">Job: '+esc(js.status.replace("_"," "))+'</span>'):"";
-    var visitBadge=(l.visitDate&&!js)?('<span class="badge" style="background:#0c5460;color:#fff;margin-left:7px">Visit: scheduled</span>'):"";
-    // Only offer first-time visit scheduling here — the Leads tab has no other way to do that.
-    // Once a visit exists, rescheduling (and canceling) happens exclusively on the Schedule tab,
-    // so this button no longer shows for an already-scheduled visit.
-    var showVisit=isOpen&&!js&&!l.visitDate;
+  var restHtml=rest.map(function(l){
     // The list is already sorted by status group (statOrder above); this just makes that
     // grouping visible with a small header the first time each status is encountered,
     // instead of leaving same-status rows to blend together with no visual separation.
-    var groupHeader=(l.status!==lastGroup)?('<div class="ct" style="font-size:13px;color:var(--text);margin:'+(lastGroup===null?"0":"16px")+' 0 6px 4px">'+(statLabels[l.status]||l.status)+" \u00b7 "+groupCounts[l.status]+'</div>'):"";
+    var topMargin=lastGroup===null?(pinned.length?"18px":"0"):"16px";
+    var groupHeader=(l.status!==lastGroup)?('<div class="ct" style="font-size:13px;color:var(--text);margin:'+topMargin+' 0 6px 4px">'+(statLabels[l.status]||l.status)+" \u00b7 "+groupCounts[l.status]+'</div>'):"";
     lastGroup=l.status;
-    return groupHeader+"<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span>"+jobBadge+visitBadge+"</div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+mapLink(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div>"+returningLine+dupLine+"</div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(showVisit?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();openVisitModal('"+l.id+"')\">📅 Visit</button>":"")+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
-  }).join(""):q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>';
+    return groupHeader+renderLeadRow(l);
+  }).join("");
+
+  document.getElementById("llist").innerHTML=(pinned.length||rest.length)?(pinnedHtml+restHtml):(q?'<div class="es">No matches</div>':'<div class="es">No leads yet — they come from your website contact form</div>');
   var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
 }
 function toggleHideLost(){var c=document.getElementById("lead-hide-lost");ls("fir:hideLostLeads",!!(c&&c.checked));renderLL();}
