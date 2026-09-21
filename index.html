@@ -1135,9 +1135,10 @@ function findDuplicateLead(phone,email,excludeId){
   return"waiting";// contacted or quoted, nothing booked yet — waiting on them, not you
 }
 function leadNeedsAction(l){return leadWorkflowGroup(l)==="action";}
+function isLeadOpen(l){return l.status!=="won"&&l.status!=="lost";}// single definition of "open" — was independently re-written in 4 places; consolidated here
 function renderLeadRow(l){
   var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
-  var isOpen=l.status!=="won"&&l.status!=="lost";
+  var isOpen=isLeadOpen(l);
   var age=ageLabel(l.created);
   var border=ageBorder(l.created);
   var dup=findDuplicateLead(l.phone,l.email,l.id);
@@ -1507,7 +1508,7 @@ async function emailEst(){
       if(e.status==="draft"){e.status="sent";document.getElementById("fstat").value="sent";updBtns("sent");
         if(e.leadId){
           var ld=null;for(var li=0;li<leads.length;li++){if(leads[li].id===e.leadId){ld=leads[li];break}}
-          if(!ld||(ld.status!=="won"&&ld.status!=="lost")){
+          if(!ld||isLeadOpen(ld)){
             await updateLeadStatus(e.leadId,"quoted",true);
             justQuoted=true;
           }
@@ -1953,7 +1954,7 @@ function renderSched(){
     // (not won/lost) and not already past the visit stage (no linked job yet). Matches
     // showVisit's gating in renderLL() exactly, so this button can't reach a state the
     // Leads tab itself blocks.
-    var visitOpen=l.status!=="won"&&l.status!=="lost"&&!leadJobStatus(l.id);
+    var visitOpen=isLeadOpen(l)&&!leadJobStatus(l.id);
     var rescheduleBtn=visitOpen?'<button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();openVisitModal(\''+l.id+'\')">📅 Reschedule</button>':"";
     var html='<div class="li" style="flex-wrap:wrap;gap:6px;border-left:3px solid #0c5460"><div onclick="editLead(\''+l.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+'</div><div class="lim">'+esc(l.name||"")+(l.address?" · "+mapLink(l.address):"")+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+rescheduleBtn+'<span class="badge" style="background:#0c5460;color:#fff">visit</span><button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();cancelVisit(\''+l.id+'\')">Cancel</button></div></div>';
     return{ts:l.visitDate,html:html};
