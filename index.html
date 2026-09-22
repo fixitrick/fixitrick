@@ -1141,11 +1141,13 @@ function findDuplicateLead(phone,email,excludeId){
   }
   return best;
 }function leadHasOpenEstimate(leadId){
-  // visitDate never gets cleared once the visit actually happens — there's no
-  // "visit completed" flag, it just sits there permanently. So once an estimate
-  // exists at all (even still draft/sent, before it reaches an active job state),
-  // that's the real signal the visit already did its job. Declined estimates
-  // don't count — those are handled by the lost-status path instead.
+  // As of the September 21, 2026 saveEst() fix, a brand-new estimate now clears the
+  // lead's visitDate directly the moment it's created, so this masking mostly matters
+  // for records that predate that fix, or the rare edge case where visitDate somehow
+  // persists alongside an estimate anyway. Either way, an estimate existing at all
+  // (even still draft/sent, before it reaches an active job state) is the real signal
+  // the visit already did its job. Declined estimates don't count — those are handled
+  // by the lost-status path instead.
   for(var i=0;i<ests.length;i++){if(ests[i].leadId===leadId&&ests[i].status!=="declined")return true;}
   return false;
 }
@@ -1169,7 +1171,9 @@ function leadWorkflowGroup(l){
     if(js.status==="complete")return"job_ready_invoice";
   }
   // Checked before visitDate on purpose: an estimate already sent means the visit
-  // already served its purpose, even though nothing ever clears visitDate itself.
+  // already served its purpose. saveEst() now clears visitDate itself on a brand-new
+  // estimate, but this check still matters for older records or any edge case where
+  // it wasn't cleared — a safety net, not the only defense against a stale visitDate.
   if(leadHasOpenEstimate(l.id))return"waiting";
   if(l.visitDate)return"visit";
   if(l.status==="new")return"action";
@@ -1194,7 +1198,7 @@ function renderLeadRow(l){
   // Once a visit exists, rescheduling (and canceling) happens exclusively on the Schedule tab,
   // so this button no longer shows for an already-scheduled visit.
   var showVisit=isOpen&&!js&&!l.visitDate;
-  return "<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span>"+jobBadge+visitBadge+"</div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+mapLink(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div>"+returningLine+dupLine+"</div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(showVisit?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();openVisitModal('"+l.id+"')\">📅 Visit</button>":"")+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
+  return "<div class=\"li\" style=\"flex-wrap:wrap;gap:6px;"+border+"\"><div onclick=\"editLead('"+l.id+"')\" style=\"cursor:pointer;flex:1;min-width:160px\"><div class=\"lin\">"+esc(l.name)+"<span style=\"font-size:10px;font-weight:600;margin-left:7px;"+ageColor+"\">"+age+"</span>"+jobBadge+visitBadge+"</div><div class=\"lim\">"+esc(l.source||"")+(l.phone?" · "+telLink(l.phone):"")+(l.address?" · "+mapLink(l.address):"")+(l.jobDesc?"<br>"+esc(l.jobDesc.slice(0,60))+(l.jobDesc.length>60?"...":""):"")+"</div>"+returningLine+dupLine+"</div><div style=\"display:flex;gap:5px;align-items:center;flex-wrap:wrap\"><select style=\"font-size:11px;padding:3px 6px;border-radius:6px;width:auto\" onclick=\"event.stopPropagation()\" onchange=\"updateLeadStatus('"+l.id+"',this.value)\">"+statOpts+"</select>"+(showVisit?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();openVisitModal('"+l.id+"')\">📅 Visit</button>":"")+(isOpen?"<button class=\"bp\" style=\"padding:4px 9px;font-size:11px\" onclick=\"event.stopPropagation();convertLead('"+l.id+"')\">→ Estimate</button>":"")+(isOpen?"<button class=\"bs2\" style=\"padding:4px 9px;font-size:11px;color:#888\" onclick=\"event.stopPropagation();markOutOfArea('"+l.id+"')\">Not in Area</button>":"")+"<button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delLead('"+l.id+"')\" title=\"Delete\">🗑</button></div></div>";
 }
 function renderLL(){
   var q=(document.getElementById("lead-search")||{}).value||"";
@@ -1244,7 +1248,22 @@ function renderLL(){
   var older=document.getElementById("lead-older");if(older)older.style.display=leadAllLoaded?"none":"block";
 }
 function toggleHideLost(){var c=document.getElementById("lead-hide-lost");ls("fir:hideLostLeads",!!(c&&c.checked));renderLL();}
-async function delLead(id){if(!confirm("Delete this lead? This can't be undone."))return;var hadVisit=false;for(var i=0;i<leads.length;i++){if(leads[i].id===id){hadVisit=!!leads[i].visitDate;break}}leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");if(hadVisit){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"lead",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"lead",id:id});}}var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
+async function markOutOfArea(id){
+  var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===id){l=leads[i];break}}
+  if(!l)return;
+  if(!l.email){toast("No email on this lead \u2014 can't send");return;}
+  if(!confirm("Send an out-of-area email to "+(l.name||"this lead")+" and delete this lead? This can't be undone."))return;
+  try{
+    var r=await fetch(SURL+"/functions/v1/lead-out-of-area",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({id:id})});
+    var j=await r.json();
+    if(!r.ok||!j.ok){throw new Error((j&&j.error)||r.status);}
+  }catch(e){toast("Failed to send \u2014 lead not deleted: "+e.message);return;}
+  toast("Email sent");
+  // skipConfirm=true — already confirmed above; delLead() reused as-is so there's still
+  // exactly one deletion code path (matches the same reasoning in the Edge Function itself).
+  await delLead(id,true);
+}
+async function delLead(id,skipConfirm){if(!skipConfirm&&!confirm("Delete this lead? This can't be undone."))return;var hadVisit=false;for(var i=0;i<leads.length;i++){if(leads[i].id===id){hadVisit=!!leads[i].visitDate;break}}leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");if(hadVisit){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"lead",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"lead",id:id});}}var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 
 
 async function clearAllData(){
