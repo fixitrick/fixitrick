@@ -1111,7 +1111,16 @@ function findDuplicateLead(phone,email,excludeId){
     if(e.leadId===leadId&&order[e.status]&&order[e.status]>bestOrder){bestOrder=order[e.status];best=e;}
   }
   return best;
-}function leadWorkflowGroup(l){
+}function leadHasOpenEstimate(leadId){
+  // visitDate never gets cleared once the visit actually happens — there's no
+  // "visit completed" flag, it just sits there permanently. So once an estimate
+  // exists at all (even still draft/sent, before it reaches an active job state),
+  // that's the real signal the visit already did its job. Declined estimates
+  // don't count — those are handled by the lost-status path instead.
+  for(var i=0;i<ests.length;i++){if(ests[i].leadId===leadId&&ests[i].status!=="declined")return true;}
+  return false;
+}
+function leadWorkflowGroup(l){
   // Single source of truth for "what's actually going on with this lead" —
   // independent of the raw new/contacted/quoted dropdown, which is a pipeline
   // label (for reports/records) and was never meant to answer that question.
@@ -1130,6 +1139,9 @@ function findDuplicateLead(phone,email,excludeId){
     if(js.status==="in_progress")return"job_in_progress";
     if(js.status==="complete")return"job_ready_invoice";
   }
+  // Checked before visitDate on purpose: an estimate already sent means the visit
+  // already served its purpose, even though nothing ever clears visitDate itself.
+  if(leadHasOpenEstimate(l.id))return"waiting";
   if(l.visitDate)return"visit";
   if(l.status==="new")return"action";
   return"waiting";// contacted or quoted, nothing booked yet — waiting on them, not you
@@ -1678,6 +1690,45 @@ async function cancelJob(id){
   sv("sched");
   window.scrollTo(0,returnScroll);
 }
+// Unschedule Job: for when a specific appointment falls through but the job itself is
+// still alive — e.g. the customer needs to pick a new date, but hasn't yet. Unlike
+// cancelJob() above, this does NOT decline the estimate and does NOT touch the linked
+// lead's status; it only clears the date and drops the estimate back to "approved",
+// which is exactly what an approved-but-unscheduled job already looks like everywhere
+// else in the app — the Dashboard's unscheduled-approved panel and the Leads tab's
+// "Job needs scheduling" bucket both pick this up automatically, since both are computed
+// live from status/schedDate rather than tracked separately.
+async function unscheduleJob(id){
+  var returnScroll=window.scrollY||document.documentElement.scrollTop||0;
+  if(document.getElementById("feid").value!==id){openEF(id);}
+  var d=getFormData();
+  if(!confirm("Unschedule this job? This removes it from the calendar. The job stays open and goes back to needing a date."))return;
+  await ensureEstNum(d);
+  var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
+  var hadSchedDate=!!d.schedDate;
+  d.status="approved";
+  d.schedDate=null;
+  d.schedDurationMin=null;
+  if(idx>=0)ests[idx]=d;else ests.push(d);
+  // e2db() doesn't map schedDate/schedDurationMin at all (see confirmSched(), which adds
+  // them the same way when SETTING a date) — so clearing them here needs the same explicit
+  // Object.assign, or the database row would keep the old date under a now-"approved" status
+  // and silently break the Dashboard's !schedDate filter after the next reload.
+  await qUp("fir_estimates",Object.assign(e2db(d),{sched_date:null,sched_duration_min:null}));
+  persistLocal();
+  document.getElementById("fstat").value="approved";
+  updBtns("approved");
+  if(hadSchedDate){
+    try{
+      var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});
+      var zj=await zr.json();
+      if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
+    }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}
+  }
+  toast("Unscheduled"+(hadSchedDate?" \u2014 calendar event removed":"")+" \u2014 back to needing a date");
+  sv("sched");
+  window.scrollTo(0,returnScroll);
+}
 function closeSchedPicker(){
   document.getElementById("sched-modal").style.display="none";
   if(schedReturnView){var v=schedReturnView;schedReturnView=null;sv(v);window.scrollTo(0,schedReturnScroll);}
@@ -1934,7 +1985,11 @@ function renderSched(){
     // since the border color doesn't either), so only that one still gets an explicit badge.
     var statusBadge=e.status==="in_progress"?(' <span class="badge '+e.status+'">'+e.status+"</span>"):"";
     var cancelBtn='<button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();cancelJob(\''+e.id+'\')">Cancel</button>';
-    var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+mapLink(e.address):"")+'</div>'+jobInfo+'</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+rescheduleBtn+'<span class="badge" style="background:#17a2b8;color:#fff">job</span>'+statusBadge+cancelBtn+'</div></div>';
+    // Same gating as rescheduleBtn above, and for the same reason — a job the crew is
+    // actively at ("in_progress") shouldn't be dropped back to "needs a date" as if no
+    // one had ever shown up. Only a plain "scheduled" (not-yet-started) job can be undone.
+    var unscheduleBtn=e.status==="scheduled"?'<button class="bs2" style="padding:2px 8px;font-size:11px" onclick="event.stopPropagation();unscheduleJob(\''+e.id+'\')">Unschedule</button>':"";
+    var html='<div class="li" style="flex-wrap:wrap;gap:6px;'+(overdue?"border-left:3px solid #dc3545":"border-left:3px solid #28a745")+'"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1;min-width:180px"><div class="lin">'+esc(dayLabel)+" · "+esc(timeLabel)+(overdue?' <span style="color:#dc3545;font-size:10px;font-weight:700">OVERDUE</span>':"")+'</div><div class="lim">'+esc(e.customer||"")+(e.address?" · "+mapLink(e.address):"")+'</div>'+jobInfo+'</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+syncBadge+rescheduleBtn+unscheduleBtn+'<span class="badge" style="background:#17a2b8;color:#fff">job</span>'+statusBadge+cancelBtn+'</div></div>';
     return{ts:e.schedDate,html:html};
   });
   var peRows=personalEvents.filter(function(p){return(p.eventDate+(p.durationMin||60)*60000)>=Date.now();}).map(function(p){
