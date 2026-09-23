@@ -1247,7 +1247,7 @@ function renderLL(){
   // When nothing is pinned, say so explicitly rather than letting the section just
   // vanish — otherwise "caught up" and "page hasn't loaded" look identical at a glance.
   // Skipped while searching, since an empty result there is about the search, not the day.
-  var pinnedHtml=pinned.length?('<div class="ct" style="font-size:13px;color:#dc3545;font-weight:700;margin:0 0 6px 4px">⚡ '+GROUP_INFO.action.label+' \u00b7 '+pinned.length+' <span style="font-weight:400;color:var(--faint)">\u2014 '+GROUP_INFO.action.hint+'</span></div>'+pinned.map(renderLeadRow).join("")):(q?"":'<div class="ct" style="font-size:13px;color:#28a745;font-weight:700;margin:0 0 6px 4px">✓ Nothing waiting on you</div>');
+  var pinnedHtml=pinned.length?('<div class="ct" style="font-size:13px;color:#dc3545;font-weight:700;margin:0 0 6px 4px;background:rgba(220,53,69,0.08);padding:6px 10px;border-radius:8px">⚡ '+GROUP_INFO.action.label+' \u00b7 '+pinned.length+' <span style="font-weight:400;color:var(--faint)">\u2014 '+GROUP_INFO.action.hint+'</span></div>'+pinned.map(renderLeadRow).join("")):(q?"":'<div class="ct" style="font-size:13px;color:#28a745;font-weight:700;margin:0 0 6px 4px;background:rgba(40,167,69,0.08);padding:6px 10px;border-radius:8px">✓ Nothing waiting on you</div>');
 
   var lastGroup=null;
   var restHtml=rest.map(function(l){
@@ -1257,7 +1257,7 @@ function renderLL(){
     // instead of leaving rows from different groups to blend together with no separation.
     var topMargin=lastGroup===null?(pinnedHtml?"18px":"0"):"16px";
     var info=GROUP_INFO[g];
-    var groupHeader=(g!==lastGroup)?('<div class="ct" style="font-size:13px;color:var(--text);margin:'+topMargin+' 0 6px 4px">'+((info&&info.label)||g)+" \u00b7 "+groupCounts[g]+(info?' <span style="font-weight:400;color:var(--faint)">\u2014 '+info.hint+'</span>':"")+'</div>'):"";
+    var groupHeader=(g!==lastGroup)?('<div class="ct" style="font-size:13px;color:var(--text);margin:'+topMargin+' 0 6px 4px;background:var(--bg);padding:6px 10px;border-radius:8px">'+((info&&info.label)||g)+" \u00b7 "+groupCounts[g]+(info?' <span style="font-weight:400;color:var(--faint)">\u2014 '+info.hint+'</span>':"")+'</div>'):"";
     lastGroup=g;
     return groupHeader+renderLeadRow(l);
   }).join("");
