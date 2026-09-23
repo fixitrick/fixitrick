@@ -256,7 +256,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="mb"><label>Notes</label><textarea id="lln-notes" placeholder="Gate code, dog on property, access details, etc." style="min-height:48px" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea></div>
     <div class="br" style="margin-top:0"><button class="bp" onclick="saveLead()">Save Lead</button><button class="bs2" onclick="toggleLF()">Cancel</button></div>
   </div>
-  <div class="card"><input id="lead-search" placeholder="Search leads..." oninput="renderLL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-bottom:8px;cursor:pointer"><input type="checkbox" id="lead-hide-lost" onchange="toggleHideLost()"> Hide lost leads</label><div id="llist"></div><div id="lead-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('lead')">Load older records</button></div></div>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><input id="lead-search" placeholder="Search leads..." oninput="renderLL()" style="flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box;margin-right:8px"><button class="bs2" style="white-space:nowrap" onclick="openStatusGuide()">ℹ️ Status Guide</button></div><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-bottom:8px;cursor:pointer"><input type="checkbox" id="lead-hide-lost" onchange="toggleHideLost()"> Hide lost leads</label><div id="llist"></div><div id="lead-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('lead')">Load older records</button></div></div>
 </div>
 <div id="v-set" class="view">
   <div class="sh"><h2>Settings</h2></div>
@@ -831,6 +831,8 @@ async function startNow(){
   if(!confirm("Start this job now? This skips scheduling entirely \u2014 no calendar entry, no confirmation email \u2014 and moves straight to In Progress."))return;
   await markStat("in_progress");
 }
+function openStatusGuide(){document.getElementById("status-guide-sheet").style.display="flex";}
+function closeStatusGuide(){document.getElementById("status-guide-sheet").style.display="none";}
 function openHowTo(jobType){
   document.getElementById("howto-jobtype").value=jobType||"";
   howtoPhotoBase64=null;
@@ -2072,6 +2074,24 @@ function renderSched(){
 </script>
 
 <!-- How-To Sheet -->
+<div id="status-guide-sheet" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:1100;flex-direction:column">
+  <div style="background:var(--g);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="color:#fff;font-weight:700;font-size:15px">Lead Status Guide</div>
+    <button onclick="closeStatusGuide()" style="background:none;border:none;color:#fff;font-size:22px;line-height:1;cursor:pointer;padding:0 6px">&times;</button>
+  </div>
+  <div style="padding:12px 16px;overflow-y:auto">
+    <p style="font-size:13px;color:var(--faint);margin-top:0">The New/Contacted/Quoted dropdown on each lead still matters for your own records, but the sections on the Leads tab are grouped by what's actually happening — a scheduled job, a booked visit, an estimate awaiting a reply — not just what the dropdown says. Here's what each section means, top to bottom:</p>
+    <div class="card" style="border-left:3px solid #dc3545"><div class="ct" style="color:#dc3545">⚡ Awaiting your action</div><div style="font-size:13px">Brand-new leads nobody's contacted yet. Sorted oldest first, so the one that's waited longest is at the top. Shows "✓ Nothing waiting on you" when it's empty.</div></div>
+    <div class="card"><div class="ct">Job needs scheduling</div><div style="font-size:13px">The estimate's been approved, but no date is on the calendar yet. Also where a job lands after using the Schedule tab's Unschedule button.</div></div>
+    <div class="card"><div class="ct">Job scheduled</div><div style="font-size:13px">A specific date is booked for the job. It hasn't started yet.</div></div>
+    <div class="card"><div class="ct">Job in progress</div><div style="font-size:13px">The crew is actively out on this job right now.</div></div>
+    <div class="card"><div class="ct">Ready to invoice</div><div style="font-size:13px">The job was marked complete, but the invoice step hasn't finished yet. Should be rare — Complete &amp; Invoice normally does both at once. If you see something here, it's worth finishing the invoice.</div></div>
+    <div class="card"><div class="ct">Visit scheduled</div><div style="font-size:13px">A visit is booked to look at the job, but no estimate exists yet. Once you create an estimate from it, the lead moves on its own — this section is never where an already-estimated lead sits.</div></div>
+    <div class="card"><div class="ct">Waiting to hear back</div><div style="font-size:13px">You've contacted them, or sent a quote, and nothing's booked yet. This is the "ball's in their court" pile — nothing to do until they respond.</div></div>
+    <div class="card"><div class="ct">Lost</div><div style="font-size:13px">An estimate was declined, or the lead was otherwise closed out. Hideable with the "Hide lost leads" checkbox above the list.</div></div>
+    <p style="font-size:12px;color:var(--faint)">Won leads (invoiced, with a client record created) don't appear on this tab at all — check the Clients tab instead.</p>
+  </div>
+</div>
 <div id="howto-sheet" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:1100;flex-direction:column">
   <div style="background:var(--g);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div style="color:#fff;font-weight:700;font-size:15px">How to do this</div>
