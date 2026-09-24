@@ -123,7 +123,7 @@ textarea{resize:vertical;min-height:64px}
   <div class="sg" id="dstats"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.85rem">
     <div class="card" style="margin:0"><div class="ct">Win Rate</div><div id="dwr" style="font-size:24px;font-weight:700;color:var(--g)">-</div><div class="wbar"><div class="wfill" id="dwf" style="width:0%"></div></div><div style="font-size:11px;color:var(--faint);margin-top:4px" id="dwsub">-</div></div>
-    <div class="card" style="margin:0"><div class="ct">By Status</div><div id="dpipe" style="font-size:12px;color:var(--muted);line-height:1.9"></div></div>
+    <div class="card" style="margin:0"><div class="ct">By Status · last 90 days</div><div id="dpipe" style="font-size:12px;color:var(--muted);line-height:1.9"></div></div>
   </div>
   
   <div class="owed-card" id="followup-section" style="display:none">
@@ -636,19 +636,34 @@ function sv(view){
   window.scrollTo(0,0);
 }
 function renderDB(){
-  var tot=ests.reduce(function(a,e){return a+e.total},0);
-  var coll=invs.filter(function(i){return i.paid}).reduce(function(a,i){return a+i.total},0);
+  // Dashboard figures use a fixed window (v49, September 24, 2026). Before this they
+  // summed whatever records happened to be loaded, so they jumped after "Load older
+  // records" or opening a client's full history, and no label said what period they
+  // covered. Now every windowed figure counts only records CREATED in the last 90 days
+  // (the same span the app loads by default, so the data is always all there), and
+  // extra older records in memory are ignored. Two figures are deliberately not
+  // windowed, because they describe "right now": Open estimates value (everything
+  // still in play, any age) and Outstanding (every unpaid invoice, any age) — both are
+  // always fully loaded. Collected counts paid invoices created in the window, not
+  // paid in it; an old invoice paid recently shows in Reports, which uses payment date.
+  var dashCutoff=Date.now()-90*24*60*60*1000;
+  var winEsts=ests.filter(function(e){return e.created>=dashCutoff});
+  var openVal=ests.filter(function(e){return statusIn(e.status,EST_OPEN_STATUSES)}).reduce(function(a,e){return a+e.total},0);
+  var coll=invs.filter(function(i){return i.paid&&i.created>=dashCutoff}).reduce(function(a,i){return a+i.total},0);
   var outst=invs.filter(function(i){return!i.paid}).reduce(function(a,i){return a+i.total},0);
-  document.getElementById("dstats").innerHTML="<div class=\"sc\"><div class=\"sv\">"+fmt(tot)+"</div><div class=\"sl\">Estimates value</div></div><div class=\"sc\"><div class=\"sv\">"+fmt(coll)+"</div><div class=\"sl\">Revenue collected</div></div><div class=\"sc\"><div class=\"sv\">"+fmt(outst)+"</div><div class=\"sl\">Outstanding</div></div><div class=\"sc\"><div class=\"sv\">"+ests.length+"</div><div class=\"sl\">Total estimates</div></div>";
+  var tile=function(v,label,sub){return"<div class=\"sc\"><div class=\"sv\">"+v+"</div><div class=\"sl\">"+label+"<br><span style=\"font-weight:400;opacity:.75\">"+sub+"</span></div></div>"};
+  document.getElementById("dstats").innerHTML=tile(fmt(openVal),"Open estimates value","in play now, any age")+tile(fmt(coll),"Collected","invoiced last 90 days")+tile(fmt(outst),"Outstanding","all unpaid")+tile(winEsts.length,"Estimates","last 90 days");
   var wonStatuses=EST_WON_STATUSES;
-  var appr=ests.filter(function(e){return wonStatuses.indexOf(e.status)!==-1}).length;
-  var decl=ests.filter(function(e){return e.status==="declined"}).length;
-  var pend=ests.filter(function(e){return statusIn(e.status,EST_UNDECIDED_STATUSES)}).length;
+  var appr=winEsts.filter(function(e){return wonStatuses.indexOf(e.status)!==-1}).length;
+  var decl=winEsts.filter(function(e){return e.status==="declined"}).length;
+  var pend=winEsts.filter(function(e){return statusIn(e.status,EST_UNDECIDED_STATUSES)}).length;
   var decided=appr+decl;var wr=decided>0?Math.round(appr/decided*100):0;
   document.getElementById("dwr").textContent=decided>0?wr+"%":"--";
   document.getElementById("dwf").style.width=wr+"%";
-  document.getElementById("dwsub").textContent=decided>0?(appr+" won · "+decl+" lost · "+pend+" open"):ests.length>0?"No decided estimates yet":"Create your first estimate";
-  var st={};ests.forEach(function(e){st[e.status]=(st[e.status]||0)+1});
+  // "undecided" (draft/sent) rather than the old "open": "open" means something wider
+  // everywhere else in the app (not invoiced or declined).
+  document.getElementById("dwsub").textContent=decided>0?("Last 90 days: "+appr+" won · "+decl+" lost · "+pend+" undecided"):winEsts.length>0?"No decided estimates in the last 90 days":ests.length>0?"No estimates in the last 90 days":"Create your first estimate";
+  var st={};winEsts.forEach(function(e){st[e.status]=(st[e.status]||0)+1});
   document.getElementById("dpipe").innerHTML=Object.keys(st).map(function(k){return"<span class=\"badge "+k+"\">"+k+"</span> <strong>"+st[k]+"</strong>"}).join("<br>");
 
   // Same definition as the Leads tab's "Awaiting your action" section — a lead only
