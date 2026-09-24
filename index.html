@@ -1133,7 +1133,7 @@ async function refreshLeads(){
     leadAllLoaded=false;
     renderLL();
     persistLocal();
-    toast("Leads refreshed");
+    toast("Pipeline refreshed");
   }catch(e){
     console.error("Lead refresh error:",e);
     toast("Couldn't refresh — check connection");
