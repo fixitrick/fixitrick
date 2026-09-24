@@ -293,6 +293,35 @@ textarea{resize:vertical;min-height:64px}
 </div>
 </div>
 <script>
+// ---- Status definitions (consolidated September 24, 2026, v48) ----
+// Every multi-status rule that was written out in more than one place, or that names a
+// real business concept, is defined once here and read from everywhere else. This was
+// a pure refactor: each call site behaves exactly as it did before (verified by running
+// old and new logic side by side against every status value, including blank and
+// unrecognized ones).
+// Deliberately NOT folded in here, because each is a different rule, not a copy:
+//  - isLeadOpen(): "not won and not lost", so a blank/unknown lead status counts as open.
+//    LEAD_UNRESOLVED_STATUSES below is an explicit list, so blank/unknown does NOT count.
+//    That difference is existing behavior and is preserved on purpose.
+//  - estGroup() (Estimates tab): anything not declined or invoiced counts as open, so
+//    an odd record is shown rather than hidden. EST_OPEN_STATUSES treats it as closed.
+//  - leadJobStatus(): a ranking of job stages, not a membership list.
+//  - Single-status checks (e.g. status !== "declined") are left as written.
+//  - updBtns()' Schedule button rule (approved or scheduled) is used in one place only.
+var EST_OPEN_STATUSES=["draft","sent","approved","scheduled","in_progress","complete"];// not invoiced, not declined
+var EST_WON_STATUSES=["approved","scheduled","in_progress","complete","invoiced"];// counts as won for Win Rate
+var EST_UNDECIDED_STATUSES=["draft","sent"];// customer hasn't decided yet
+var EST_BOOKED_STATUSES=["approved","scheduled","in_progress"];// customer said yes, work not finished
+var EST_DECLINABLE_STATUSES=["sent"].concat(EST_BOOKED_STATUSES);// where the Declined button shows
+var EST_ACTIVE_JOB_STATUSES=["scheduled","in_progress"];// a job on the calendar or underway
+var LEAD_STATUSES=["new","contacted","quoted","won","lost"];// every lead status, in dropdown order
+var LEAD_UNRESOLVED_STATUSES=["new","contacted","quoted"];// explicit list; see isLeadOpen() note above
+function statusIn(st,list){return list.indexOf(st)!==-1;}
+// Builds a plain lookup object ({draft:1,...}) — the same shape the offline cache
+// always used, so lookups behave identically to the literals they replaced.
+function statusSet(list){var o={};for(var i=0;i<list.length;i++)o[list[i]]=1;return o;}
+// PostgREST filter fragment, e.g. status.in.(new,contacted,quoted)
+function pgStatusIn(list){return"status.in.("+list.join(",")+")";}
 var SURL="https://dzfxbxgzvgnqbkmhvprj.supabase.co";
 var SKEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6ZnhieGd6dmducWJrbWh2cHJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDg2NTMsImV4cCI6MjA5NDQyNDY1M30.CzcS7AO9kGzHG-N_beqNk7wsFpcHhTdpdlyjEbni01s";
 
@@ -459,8 +488,8 @@ async function qDel(table,id){
 }
 function persistLocal(){
   var cutoff=Date.now()-90*24*60*60*1000;
-  var openEstStatuses={draft:1,sent:1,approved:1,scheduled:1,in_progress:1,complete:1};
-  var openLeadStatuses={"new":1,contacted:1,quoted:1};
+  var openEstStatuses=statusSet(EST_OPEN_STATUSES);
+  var openLeadStatuses=statusSet(LEAD_UNRESOLVED_STATUSES);
   try{
     ls("fir:e",ests.filter(function(e){return e.created>=cutoff||openEstStatuses[e.status]}));
     ls("fir:i",invs.filter(function(i){return i.created>=cutoff||!i.paid}));
@@ -560,9 +589,9 @@ async function load(){
   syncBadge("Syncing...",null);
   try{
     var cutoff=Date.now()-90*24*60*60*1000;
-    var estOr="or=(created_at.gte."+cutoff+",status.in.(draft,sent,approved,scheduled,in_progress,complete))";
+    var estOr="or=(created_at.gte."+cutoff+","+pgStatusIn(EST_OPEN_STATUSES)+")";
     var invOr="or=(created_at.gte."+cutoff+",paid.eq.false)";
-    var leadOr="or=(created_at.gte."+cutoff+",status.in.(new,contacted,quoted))";
+    var leadOr="or=(created_at.gte."+cutoff+","+pgStatusIn(LEAD_UNRESOLVED_STATUSES)+")";
     var re=await fetch(SURL+"/rest/v1/fir_estimates?select=*&order=created_at.asc&"+estOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var ri=await fetch(SURL+"/rest/v1/fir_invoices?select=*&order=created_at.asc&"+invOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     var rc=await fetch(SURL+"/rest/v1/fir_clients?select=*&order=created_at.asc",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
@@ -611,10 +640,10 @@ function renderDB(){
   var coll=invs.filter(function(i){return i.paid}).reduce(function(a,i){return a+i.total},0);
   var outst=invs.filter(function(i){return!i.paid}).reduce(function(a,i){return a+i.total},0);
   document.getElementById("dstats").innerHTML="<div class=\"sc\"><div class=\"sv\">"+fmt(tot)+"</div><div class=\"sl\">Estimates value</div></div><div class=\"sc\"><div class=\"sv\">"+fmt(coll)+"</div><div class=\"sl\">Revenue collected</div></div><div class=\"sc\"><div class=\"sv\">"+fmt(outst)+"</div><div class=\"sl\">Outstanding</div></div><div class=\"sc\"><div class=\"sv\">"+ests.length+"</div><div class=\"sl\">Total estimates</div></div>";
-  var wonStatuses=["approved","scheduled","in_progress","complete","invoiced"];
+  var wonStatuses=EST_WON_STATUSES;
   var appr=ests.filter(function(e){return wonStatuses.indexOf(e.status)!==-1}).length;
   var decl=ests.filter(function(e){return e.status==="declined"}).length;
-  var pend=ests.filter(function(e){return e.status==="draft"||e.status==="sent"}).length;
+  var pend=ests.filter(function(e){return statusIn(e.status,EST_UNDECIDED_STATUSES)}).length;
   var decided=appr+decl;var wr=decided>0?Math.round(appr/decided*100):0;
   document.getElementById("dwr").textContent=decided>0?wr+"%":"--";
   document.getElementById("dwf").style.width=wr+"%";
@@ -937,16 +966,16 @@ function updBtns(s){
   var startnow=document.getElementById("btn-startnow");
   sent.style.display=s==="draft"?"":"none";
   appr.style.display=s==="sent"?"":"none";
-  decl.style.display=(s==="sent"||s==="approved"||s==="scheduled"||s==="in_progress")?"":"none";
+  decl.style.display=statusIn(s,EST_DECLINABLE_STATUSES)?"":"none";
   if(decl)decl.textContent=s==="sent"?"Declined":"Cancel Job";
   sched.style.display=(s==="approved"||s==="scheduled")?"":"none";
   if(sched)sched.textContent=s==="scheduled"?"Reschedule":"Scheduled";
   if(startnow)startnow.style.display=s==="approved"?"":"none";
   inp.style.display=s==="scheduled"?"":"none";
-  comp.style.display=(s==="scheduled"||s==="in_progress")?"":"none";
+  comp.style.display=statusIn(s,EST_ACTIVE_JOB_STATUSES)?"":"none";
   inv.style.display=s==="complete"?"":"none";
   var howto=document.getElementById("btn-howto");
-  if(howto)howto.style.display=(s==="scheduled"||s==="in_progress")?"":"none";
+  if(howto)howto.style.display=statusIn(s,EST_ACTIVE_JOB_STATUSES)?"":"none";
 }
 async function startNow(){
   var id=document.getElementById("feid").value;
@@ -1139,7 +1168,7 @@ async function markStat(stat){
   await ensureEstNum(d);
   var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
   var leadId=null,hadSchedDate=false;
-  if(stat==="declined"&&(d.status==="approved"||d.status==="scheduled"||d.status==="in_progress")){
+  if(stat==="declined"&&statusIn(d.status,EST_BOOKED_STATUSES)){
     if(!confirm(d.schedDate?"Cancel this job? This removes it from your calendar and can't be undone.":"Cancel this job? This can't be undone."))return;
   }
   hadSchedDate=!!d.schedDate;
@@ -1177,7 +1206,7 @@ async function markStat(stat){
     // lingering in the open-records pool (Section 50) with nothing ever resolving it.
     var siblingsDeclined=0;
     for(var i=0;i<ests.length;i++){
-      if(ests[i].leadId===leadId&&ests[i].id!==id&&(ests[i].status==="draft"||ests[i].status==="sent")){
+      if(ests[i].leadId===leadId&&ests[i].id!==id&&statusIn(ests[i].status,EST_UNDECIDED_STATUSES)){
         ests[i].status="declined";
         await qUp("fir_estimates",e2db(ests[i]));
         siblingsDeclined++;
@@ -1323,7 +1352,7 @@ async function refreshLeads(){
   if(btn){btn.disabled=true;btn.textContent="⟳ Refreshing...";}
   try{
     var cutoff=Date.now()-90*24*60*60*1000;
-    var leadOr="or=(created_at.gte."+cutoff+",status.in.(new,contacted,quoted))";
+    var leadOr="or=(created_at.gte."+cutoff+","+pgStatusIn(LEAD_UNRESOLVED_STATUSES)+")";
     var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&"+leadOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     if(!rl.ok)throw new Error("fetch failed");
     leads=(await rl.json()).map(db2l);
@@ -1343,7 +1372,7 @@ function findDuplicateLead(phone,email,excludeId){
   for(var i=0;i<leads.length;i++){
     var other=leads[i];
     if(other.id===excludeId)continue;
-    if(other.status==="won"||other.status==="lost")continue;
+    if(!isLeadOpen(other))continue;
     var op=normPhone(other.phone),oe=(other.email||"").toLowerCase().trim();
     if(np&&op&&op===np)return other;
     if(ne&&oe&&oe===ne)return other;
@@ -1421,7 +1450,7 @@ var GROUP_INFO={
 };
 function isLeadOpen(l){return l.status!=="won"&&l.status!=="lost";}// single definition of "open" — was independently re-written in 4 places; consolidated here
 function renderLeadRow(l){
-  var statOpts=["new","contacted","quoted","won","lost"].map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
+  var statOpts=LEAD_STATUSES.map(function(s){return'<option value="'+s+'"'+(l.status===s?" selected":"")+'>'+s+'</option>'}).join("");
   var isOpen=isLeadOpen(l);
   var age=ageLabel(l.created);
   var border=ageBorder(l.created);
@@ -1894,7 +1923,7 @@ function openSchedPicker(){
 function sameDayCalendarItems(dt,excludeEstId,excludeLeadId){
   var sameDayJobs=ests.filter(function(e){
     if(e.id===excludeEstId||!e.schedDate)return false;
-    if(e.status!=="scheduled"&&e.status!=="in_progress")return false;
+    if(!statusIn(e.status,EST_ACTIVE_JOB_STATUSES))return false;
     return new Date(e.schedDate).toLocaleDateString("en-CA")===dt;
   });
   var sameDayPe=personalEvents.filter(function(p){
@@ -1964,7 +1993,7 @@ function updateSchedContext(){
   var sameDay=sameDayCalendarItems(dt,id);
   var candTs=tm?new Date(dt+"T"+tm).getTime():null;
   var upcoming=ests.filter(function(e){
-    return e.id!==id&&e.schedDate&&(e.status==="scheduled"||e.status==="in_progress")&&e.schedDate>=Date.now();
+    return e.id!==id&&e.schedDate&&statusIn(e.status,EST_ACTIVE_JOB_STATUSES)&&e.schedDate>=Date.now();
   }).sort(function(a,b){return a.schedDate-b.schedDate;}).slice(0,4);
   var html=renderCalendarContext(dt,candTs,dur,sameDay);
   if(upcoming.length){
@@ -2282,7 +2311,7 @@ async function retryZohoSync(id){
   if(document.getElementById("v-sched").classList.contains("on"))renderSched();
 }
 function renderSched(){
-  var jobRows=ests.filter(function(e){return e.schedDate&&(e.status==="scheduled"||e.status==="in_progress");}).map(function(e){
+  var jobRows=ests.filter(function(e){return e.schedDate&&statusIn(e.status,EST_ACTIVE_JOB_STATUSES);}).map(function(e){
     var d=new Date(e.schedDate);
     var dayLabel=d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
     var timeLabel=fmtRange(e.schedDate,e.schedDurationMin||60);
