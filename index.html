@@ -1230,11 +1230,12 @@ async function toInvoice(){
     if(d.status==="invoiced"){toast("This estimate is already invoiced");return}
     for(var k=0;k<invs.length;k++){if(invs[k].estId===id){toast("Already invoiced as "+invs[k].invNum);return}}
     await ensureEstNum(d);
-    // Save any pending form edits first, status unchanged — same as before this rewrite,
-    // so an edit made just before tapping "To Invoice" isn't lost if the claim fails.
-    var pi=-1;for(var p=0;p<ests.length;p++){if(ests[p].id===id){pi=p;break}}
-    if(pi>=0)ests[pi]=d;else ests.push(d);
-    await qUp("fir_estimates",e2db(d));persistLocal();
+    // The form is deliberately NOT saved before the claim. If this estimate was already
+    // invoiced on another device, this device's copy still says "complete", and saving it
+    // first would overwrite the server's "invoiced" status with stale data. The live form
+    // (Section 44) is still what gets written, once the invoice exists; if the claim fails,
+    // unsaved edits simply stay on the form (Complete & Invoice has already saved them via
+    // markStat).
     var claim;
     try{claim=await claimInvoiceNumber(id);}
     catch(err){console.error("Invoice number claim failed:",err);toast("Couldn't reach the server to assign an invoice number. Nothing was changed \u2014 try again when you have a connection.");return}
