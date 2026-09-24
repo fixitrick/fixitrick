@@ -837,7 +837,47 @@ function renderEL(){
 }
 async function delEst(id){if(!confirm("Delete this estimate? This can't be undone."))return;var wasScheduled=false;for(var i=0;i<ests.length;i++){if(ests[i].id===id){wasScheduled=!!ests[i].schedDate;break}}ests=ests.filter(function(e){return e.id!==id});renderEL();toast("Estimate deleted");if(wasScheduled){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}}var ok=await qDel("fir_estimates",id);try{var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"};var listRes=await fetch(SURL+"/storage/v1/object/list/fir-photos",{method:"POST",headers:h,body:JSON.stringify({prefix:id+"/"})});var files=await listRes.json();if(Array.isArray(files)&&files.length){var paths=files.map(function(f){return id+"/"+f.name});await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:h,body:JSON.stringify({prefixes:paths})});}}catch(e){console.error("Photo cleanup failed:",e);}persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderIL(){var q=(document.getElementById("inv-search")||{}).value||"";var list=[].concat(invs).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(i){return(i.customer||"").toLowerCase().includes(ql)||(i.invNum||"").toLowerCase().includes(ql);})}document.getElementById("ilist").innerHTML=list.length?list.map(function(i){return'<div class="li"><div style="flex:1"><div class="lin">'+esc(i.invNum||"")+" - "+esc(i.customer||"")+"</div><div class=\"lim\">"+fmt(i.total)+" · Due "+new Date(i.dueDate).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+(i.paid?"paid":"unpaid")+"\">"+( i.paid?"paid":"unpaid")+"</span>"+(!i.paid?'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="markPaid(\''+i.id+'\')" >Mark Paid</button>':"")+'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="printInv(\''+i.id+'\')" >Print</button>'+(i.emailedAt?'<span class="badge sent" style="font-size:10px" title="Emailed '+new Date(i.emailedAt).toLocaleDateString()+' to '+esc(i.emailedTo)+'">\u2709\ufe0f sent</span><button class="bs2" style="padding:4px 9px;font-size:11px" onclick="if(confirm(\'Resend this invoice email?\'))emailInv(\''+i.id+'\')" >Resend</button>':'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="emailInv(\''+i.id+'\')" >Email</button>')+'<button class="db2" style="color:#dc3545;font-size:15px" onclick="delInv(\''+i.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No invoices yet</div>';var older=document.getElementById("inv-older");if(older)older.style.display=invAllLoaded?"none":"block";}
-async function delInv(id){if(!confirm("Delete this invoice? This can't be undone."))return;invs=invs.filter(function(i){return i.id!==id});renderIL();renderDB();toast("Invoice deleted");var ok=await qDel("fir_invoices",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
+// Deleting an invoice sends its estimate back to "complete" (the state right before
+// invoicing), so the job reappears as Open on the Estimates tab and "Ready to invoice" in
+// Pipeline instead of sitting at "invoiced" with no invoice behind it. The linked lead
+// goes from "won" back to "quoted", unless another estimate on that lead is still
+// invoiced (a lead can have more than one job). Either record may be too old to be
+// loaded, so each is fetched from the server if needed; if offline, only what's loaded
+// is corrected. The client record is left alone.
+async function fetchOneRow(table,query){
+  var r=await fetch(SURL+"/rest/v1/"+table+"?select=*&"+query,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+  if(!r.ok)throw new Error(await r.text());
+  var rows=await r.json();return rows.length?rows[0]:null;
+}
+async function revertAfterInvoiceDelete(inv){
+  var e=null;for(var i=0;i<ests.length;i++){if(ests[i].id===inv.estId){e=ests[i];break}}
+  if(!e){try{var er=await fetchOneRow("fir_estimates","id=eq."+encodeURIComponent(inv.estId));if(er){e=db2e(er);ests.push(e);}}catch(err){console.error("Couldn't load estimate to revert:",err);}}
+  if(!e||e.status!=="invoiced")return null;
+  e.status="complete";
+  await qUp("fir_estimates",e2db(e));
+  if(e.leadId){
+    var otherInvoiced=ests.some(function(x){return x.leadId===e.leadId&&x.id!==e.id&&x.status==="invoiced";});
+    if(!otherInvoiced){try{otherInvoiced=!!(await fetchOneRow("fir_estimates","lead_id=eq."+encodeURIComponent(e.leadId)+"&status=eq.invoiced&id=neq."+encodeURIComponent(e.id)+"&limit=1"));}catch(err){otherInvoiced=true;/* can't tell offline — leave the lead as won rather than guess */}}
+    if(!otherInvoiced){
+      var l=null;for(var j=0;j<leads.length;j++){if(leads[j].id===e.leadId){l=leads[j];break}}
+      if(!l){try{var lr=await fetchOneRow("fir_leads","id=eq."+encodeURIComponent(e.leadId));if(lr){l=db2l(lr);leads.push(l);}}catch(err){console.error("Couldn't load lead to revert:",err);}}
+      if(l&&l.status==="won"){l.status="quoted";await qUp("fir_leads",l2db(l));}
+    }
+  }
+  return e;
+}
+async function delInv(id){
+  var inv=null;for(var i=0;i<invs.length;i++){if(invs[i].id===id){inv=invs[i];break}}
+  if(!inv)return;
+  var msg="Delete "+(inv.invNum||"this invoice")+"?"+(inv.paid?" It's marked paid.":"")+(inv.estId?" "+(inv.estNum||"Its estimate")+" will go back to Complete so you can re-invoice it.":"")+" This can't be undone.";
+  if(!confirm(msg))return;
+  invs=invs.filter(function(x){return x.id!==id});
+  renderIL();renderDB();
+  var ok=await qDel("fir_invoices",id);
+  var reverted=inv.estId?await revertAfterInvoiceDelete(inv):null;
+  persistLocal();renderEL();renderLL();renderDB();
+  toast((reverted?"Invoice deleted \u2014 "+(reverted.estNum||"estimate")+" is back to Complete":"Invoice deleted")+(ok?"":" (will sync when back online)"));
+}
 function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";var list=clients;if(q){var ql=q.toLowerCase();list=list.filter(function(c){return(c.name||"").toLowerCase().includes(ql)||(c.phone||"").toLowerCase().includes(ql);})}document.getElementById("clist").innerHTML=list.length?list.map(function(c){return'<div class="li"><div onclick="editClient(\''+c.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+esc(c.name)+(c.notes?' <span title="'+esc(c.notes)+'">📝</span>':'')+'</div><div class="lim">'+telLink(c.phone||"")+' '+esc(c.email||"")+'</div></div><div style="display:flex;gap:6px;align-items:center"><button class="bp" style="padding:4px 9px;font-size:11px" onclick="event.stopPropagation();newJobFromClient(\''+c.id+'\')">+ New Job</button><button class="db2" style="color:#dc3545;font-size:15px" onclick="event.stopPropagation();delClient(\''+c.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No clients</div>'}
 async function delClient(id){if(!confirm("Delete this client? This can't be undone."))return;clients=clients.filter(function(c){return c.id!==id});renderCL();toast("Client deleted");var ok=await qDel("fir_clients",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"editExpense('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>";var older=document.getElementById("exp-older");if(older)older.style.display=expAllLoaded?"none":"block";}
@@ -1149,8 +1189,83 @@ async function markStat(stat){
     toast("Status: "+stat);
   }
 }
-async function completeAndInvoice(){var btn=document.getElementById("btn-comp");if(btn){btn.disabled=true;btn.textContent="Working...";}await markStat("complete");await toInvoice();if(btn){btn.disabled=false;btn.textContent="Complete & Invoice";}}
-async function toInvoice(){var id=document.getElementById("feid").value;if(!id){toast("Save first");return}var d=getFormData();await ensureEstNum(d);var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}if(idx>=0)ests[idx]=d;else ests.push(d);await qUp("fir_estimates",e2db(d));await flushPendingPhotoDeletes();persistLocal();var e=d;var due=new Date();due.setDate(due.getDate()+((S.due===undefined||S.due===null)?30:S.due));var num=fmtI(S.nextInv||1);S.nextInv=(S.nextInv||1)+1;var inv={id:uid(),invNum:num,estId:e.id,estNum:e.estNum,customer:e.customer,phone:e.phone,email:e.email,address:e.address,total:e.total,balance:e.balance,deposit:e.deposit,notes:e.notes,mats:e.mats,labs:e.labs,photos:e.photos,paid:false,dueDate:due.getTime(),created:Date.now()};invs.push(inv);e.status="invoiced";if(e.customer){await findOrCreateClient(e);}await qUp("fir_invoices",i2db(inv));await qUp("fir_estimates",e2db(e));if(e.leadId){await updateLeadStatus(e.leadId,"won",true);}var toCloud=Object.assign({},S);await qUp("fir_settings",{id:"main",data:toCloud});persistLocal();toast("Invoice "+num+" created!"+(e.leadId?" Linked lead marked won.":""));sv("inv");}
+async function completeAndInvoice(){var btn=document.getElementById("btn-comp");if(btn){btn.disabled=true;btn.textContent="Working...";}try{await markStat("complete");await toInvoice();}finally{if(btn){btn.disabled=false;btn.textContent="Complete & Invoice";}}}
+// Invoice integrity (Sept 2026). Three protections, in this order:
+//  1. invoiceLock — one invoice in flight at a time on this device. Covers a double-tap on
+//     "To Invoice", and tapping "To Invoice" while completeAndInvoice() is still running
+//     (markStat("complete") reveals that button mid-flow). Same idea as estNumLock.
+//  2. Already-invoiced checks — locally (status / loaded invoices), then on the server
+//     inside claim_invoice_number(), which also catches an invoice made on another device
+//     or one too old to be loaded here.
+//  3. The invoice number comes from the claim_invoice_number() RPC, not the local S.nextInv
+//     counter. It locks the settings row and returns the greater of Settings' next number
+//     and (highest existing invoice number + 1), so a stale counter on another device, or
+//     an interruption before settings saved, can no longer hand out a duplicate. A unique
+//     index on inv_num backs this up. This means invoicing needs a connection; if the RPC
+//     can't be reached, nothing is changed and the job stays "complete" to invoice later.
+// Nothing local is modified until the number is claimed AND the invoice row is written
+// (or queued for a plain network failure). A duplicate-key rejection is never queued,
+// because flushQueue() stops at the first failing item and would block all syncing.
+var invoiceLock=false;
+async function claimInvoiceNumber(estId){
+  var r=await fetch(SURL+"/rest/v1/rpc/claim_invoice_number",{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"},body:JSON.stringify({p_est_id:estId||""})});
+  var txt=await r.text();
+  if(!r.ok){
+    var m=txt.match(/ALREADY_INVOICED:([^"\\]*)/);
+    if(m)return{already:m[1]||"an existing invoice"};
+    throw new Error(txt||("HTTP "+r.status));
+  }
+  var n=parseInt(txt,10);
+  if(!(n>0))throw new Error("Bad invoice number from server: "+txt);
+  return{num:n};
+}
+async function toInvoice(){
+  var id=document.getElementById("feid").value;
+  if(!id){toast("Save first");return}
+  if(invoiceLock){toast("Already creating an invoice\u2026");return}
+  invoiceLock=true;
+  var invBtn=document.getElementById("btn-inv");if(invBtn)invBtn.disabled=true;
+  try{
+    var d=getFormData();
+    if(d.status==="invoiced"){toast("This estimate is already invoiced");return}
+    for(var k=0;k<invs.length;k++){if(invs[k].estId===id){toast("Already invoiced as "+invs[k].invNum);return}}
+    await ensureEstNum(d);
+    // Save any pending form edits first, status unchanged — same as before this rewrite,
+    // so an edit made just before tapping "To Invoice" isn't lost if the claim fails.
+    var pi=-1;for(var p=0;p<ests.length;p++){if(ests[p].id===id){pi=p;break}}
+    if(pi>=0)ests[pi]=d;else ests.push(d);
+    await qUp("fir_estimates",e2db(d));persistLocal();
+    var claim;
+    try{claim=await claimInvoiceNumber(id);}
+    catch(err){console.error("Invoice number claim failed:",err);toast("Couldn't reach the server to assign an invoice number. Nothing was changed \u2014 try again when you have a connection.");return}
+    if(claim.already){toast("Already invoiced as "+claim.already);return}
+    var num=fmtI(claim.num);
+    S.nextInv=claim.num+1;// mirror what the RPC stored, so the settings save below agrees with it
+    var due=new Date();due.setDate(due.getDate()+((S.due===undefined||S.due===null)?30:S.due));
+    var inv={id:uid(),invNum:num,estId:d.id,estNum:d.estNum,customer:d.customer,phone:d.phone,email:d.email,address:d.address,total:d.total,balance:d.balance,deposit:d.deposit,notes:d.notes,mats:d.mats,labs:d.labs,photos:d.photos,paid:false,dueDate:due.getTime(),created:Date.now()};
+    try{await sbUp("fir_invoices",i2db(inv));}
+    catch(err){
+      var msg=String(err&&err.message||err);
+      if(/23505|duplicate key/i.test(msg)){console.error("Invoice rejected as duplicate:",msg);toast("Invoice "+num+" was rejected as a duplicate. Nothing was changed \u2014 please try again.");return}
+      console.error("Invoice write failed, queued:",err);queueWrite("fir_invoices","upsert",i2db(inv));
+    }
+    // Invoice is written (or safely queued) — now apply the local and follow-on changes.
+    invs.push(inv);
+    d.status="invoiced";
+    var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===id){idx=i;break}}
+    if(idx>=0)ests[idx]=d;else ests.push(d);
+    await flushPendingPhotoDeletes();
+    if(d.customer){await findOrCreateClient(d);}
+    await qUp("fir_estimates",e2db(d));
+    if(d.leadId){await updateLeadStatus(d.leadId,"won",true);}
+    await qUp("fir_settings",{id:"main",data:Object.assign({},S)});
+    persistLocal();
+    toast("Invoice "+num+" created!"+(d.leadId?" Linked lead marked won.":""));
+    sv("inv");
+  }finally{
+    invoiceLock=false;if(invBtn)invBtn.disabled=false;
+  }
+}
 async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;invs[i].paidAt=Date.now();await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
 
 function toggleLF(){var f=document.getElementById("lform");if(f.style.display==="none"){["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("lls").selectedIndex=0;document.getElementById("lform-title").textContent="New Lead";f.style.display="block";}else{f.style.display="none";}}
