@@ -316,6 +316,11 @@ var EST_DECLINABLE_STATUSES=["sent"].concat(EST_BOOKED_STATUSES);// where the De
 var EST_ACTIVE_JOB_STATUSES=["scheduled","in_progress"];// a job on the calendar or underway
 var LEAD_STATUSES=["new","contacted","quoted","won","lost"];// every lead status, in dropdown order
 var LEAD_UNRESOLVED_STATUSES=["new","contacted","quoted"];// explicit list; see isLeadOpen() note above
+// How far back the app loads records by default (plus anything still open), and the
+// span the Dashboard counts. Defined once (v51) so the loading window, offline cache,
+// Pipeline refresh, and Dashboard can never disagree about what "recent" means.
+var LOAD_WINDOW_MS=90*24*60*60*1000;
+function loadCutoff(){return Date.now()-LOAD_WINDOW_MS;}
 function statusIn(st,list){return list.indexOf(st)!==-1;}
 // Builds a plain lookup object ({draft:1,...}) — the same shape the offline cache
 // always used, so lookups behave identically to the literals they replaced.
@@ -456,6 +461,17 @@ function queueWrite(table,op,data){
   pendingQueue.push({qid:uid(),table:table,op:op,data:data,ts:Date.now()});
   qSave(pendingQueue);
   updateSyncIndicator();
+}
+// Removes a record's event from Zoho Calendar; if that fails for any reason, queues a
+// retry through the offline queue. Replaces six identical inline copies (v51, September
+// 24, 2026): delEst(), markStat() on decline, delLead(), unscheduleJob(), visit
+// cancellation, and personal-event deletion. Same request, same checks, same retry entry.
+async function zohoDeleteEvent(recordType,id){
+  try{
+    var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:recordType,id:id})});
+    var zj=await zr.json();
+    if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
+  }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:recordType,id:id});}
 }
 // --- Set-aside ("couldn't save") list, v50 (September 24, 2026) ---
 // flushQueue() sends queued changes in order and stops at the first failure, so they
@@ -600,7 +616,7 @@ async function qDel(table,id){
   }catch(e){console.error(e);queueWrite(table,"delete",id);return false;}
 }
 function persistLocal(){
-  var cutoff=Date.now()-90*24*60*60*1000;
+  var cutoff=loadCutoff();
   var openEstStatuses=statusSet(EST_OPEN_STATUSES);
   var openLeadStatuses=statusSet(LEAD_UNRESOLVED_STATUSES);
   try{
@@ -701,7 +717,7 @@ function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.s
 async function load(){
   syncBadge("Syncing...",null);
   try{
-    var cutoff=Date.now()-90*24*60*60*1000;
+    var cutoff=loadCutoff();
     var estOr="or=(created_at.gte."+cutoff+","+pgStatusIn(EST_OPEN_STATUSES)+")";
     var invOr="or=(created_at.gte."+cutoff+",paid.eq.false)";
     var leadOr="or=(created_at.gte."+cutoff+","+pgStatusIn(LEAD_UNRESOLVED_STATUSES)+")";
@@ -759,7 +775,7 @@ function renderDB(){
   // still in play, any age) and Outstanding (every unpaid invoice, any age) — both are
   // always fully loaded. Collected counts paid invoices created in the window, not
   // paid in it; an old invoice paid recently shows in Reports, which uses payment date.
-  var dashCutoff=Date.now()-90*24*60*60*1000;
+  var dashCutoff=loadCutoff();
   var winEsts=ests.filter(function(e){return e.created>=dashCutoff});
   var openVal=ests.filter(function(e){return statusIn(e.status,EST_OPEN_STATUSES)}).reduce(function(a,e){return a+e.total},0);
   var coll=invs.filter(function(i){return i.paid&&i.created>=dashCutoff}).reduce(function(a,i){return a+i.total},0);
@@ -992,7 +1008,7 @@ function renderEL(){
   document.getElementById("elist").innerHTML=html;
   var older=document.getElementById("est-older");if(older)older.style.display=estAllLoaded?"none":"block";
 }
-async function delEst(id){if(!confirm("Delete this estimate? This can't be undone."))return;var wasScheduled=false;for(var i=0;i<ests.length;i++){if(ests[i].id===id){wasScheduled=!!ests[i].schedDate;break}}ests=ests.filter(function(e){return e.id!==id});renderEL();toast("Estimate deleted");if(wasScheduled){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}}var ok=await qDel("fir_estimates",id);try{var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"};var listRes=await fetch(SURL+"/storage/v1/object/list/fir-photos",{method:"POST",headers:h,body:JSON.stringify({prefix:id+"/"})});var files=await listRes.json();if(Array.isArray(files)&&files.length){var paths=files.map(function(f){return id+"/"+f.name});await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:h,body:JSON.stringify({prefixes:paths})});}}catch(e){console.error("Photo cleanup failed:",e);}persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
+async function delEst(id){if(!confirm("Delete this estimate? This can't be undone."))return;var wasScheduled=false;for(var i=0;i<ests.length;i++){if(ests[i].id===id){wasScheduled=!!ests[i].schedDate;break}}ests=ests.filter(function(e){return e.id!==id});renderEL();toast("Estimate deleted");if(wasScheduled){await zohoDeleteEvent("estimate",id);}var ok=await qDel("fir_estimates",id);try{var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"};var listRes=await fetch(SURL+"/storage/v1/object/list/fir-photos",{method:"POST",headers:h,body:JSON.stringify({prefix:id+"/"})});var files=await listRes.json();if(Array.isArray(files)&&files.length){var paths=files.map(function(f){return id+"/"+f.name});await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:h,body:JSON.stringify({prefixes:paths})});}}catch(e){console.error("Photo cleanup failed:",e);}persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderIL(){var q=(document.getElementById("inv-search")||{}).value||"";var list=[].concat(invs).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(i){return(i.customer||"").toLowerCase().includes(ql)||(i.invNum||"").toLowerCase().includes(ql);})}document.getElementById("ilist").innerHTML=list.length?list.map(function(i){return'<div class="li"><div style="flex:1"><div class="lin">'+esc(i.invNum||"")+" - "+esc(i.customer||"")+"</div><div class=\"lim\">"+fmt(i.total)+" · Due "+new Date(i.dueDate).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+(i.paid?"paid":"unpaid")+"\">"+( i.paid?"paid":"unpaid")+"</span>"+(!i.paid?'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="markPaid(\''+i.id+'\')" >Mark Paid</button>':"")+'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="printInv(\''+i.id+'\')" >Print</button>'+(i.emailedAt?'<span class="badge sent" style="font-size:10px" title="Emailed '+new Date(i.emailedAt).toLocaleDateString()+' to '+esc(i.emailedTo)+'">\u2709\ufe0f sent</span><button class="bs2" style="padding:4px 9px;font-size:11px" onclick="if(confirm(\'Resend this invoice email?\'))emailInv(\''+i.id+'\')" >Resend</button>':'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="emailInv(\''+i.id+'\')" >Email</button>')+'<button class="db2" style="color:#dc3545;font-size:15px" onclick="delInv(\''+i.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No invoices yet</div>';var older=document.getElementById("inv-older");if(older)older.style.display=invAllLoaded?"none":"block";}
 // Deleting an invoice sends its estimate back to "complete" (the state right before
 // invoicing), so the job reappears as Open on the Estimates tab and "Ready to invoice" in
@@ -1309,11 +1325,7 @@ async function markStat(stat){
   document.getElementById("fstat").value=stat;
   updBtns(stat);
   if(stat==="declined"&&hadSchedDate){
-    try{
-      var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});
-      var zj=await zr.json();
-      if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
-    }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}
+    await zohoDeleteEvent("estimate",id);
   }
   if(stat==="declined"&&leadId){
     var stillOpen=false;
@@ -1479,7 +1491,7 @@ async function refreshLeads(){
   var btn=document.getElementById("leadRefreshBtn");
   if(btn){btn.disabled=true;btn.textContent="⟳ Refreshing...";}
   try{
-    var cutoff=Date.now()-90*24*60*60*1000;
+    var cutoff=loadCutoff();
     var leadOr="or=(created_at.gte."+cutoff+","+pgStatusIn(LEAD_UNRESOLVED_STATUSES)+")";
     var rl=await fetch(SURL+"/rest/v1/fir_leads?select=*&order=created_at.asc&"+leadOr,{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
     if(!rl.ok)throw new Error("fetch failed");
@@ -1663,7 +1675,7 @@ async function markOutOfArea(id){
   // exactly one deletion code path (matches the same reasoning in the Edge Function itself).
   await delLead(id,true);
 }
-async function delLead(id,skipConfirm){if(!skipConfirm&&!confirm("Delete this lead? This can't be undone."))return;var hadVisit=false;for(var i=0;i<leads.length;i++){if(leads[i].id===id){hadVisit=!!leads[i].visitDate;break}}leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");if(hadVisit){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"lead",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"lead",id:id});}}var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
+async function delLead(id,skipConfirm){if(!skipConfirm&&!confirm("Delete this lead? This can't be undone."))return;var hadVisit=false;for(var i=0;i<leads.length;i++){if(leads[i].id===id){hadVisit=!!leads[i].visitDate;break}}leads=leads.filter(function(l){return l.id!==id});renderLL();toast("Lead deleted");if(hadVisit){await zohoDeleteEvent("lead",id);}var ok=await qDel("fir_leads",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 
 
 async function clearAllData(){
@@ -2190,11 +2202,7 @@ async function unscheduleJob(id){
   document.getElementById("fstat").value="approved";
   updBtns("approved");
   if(hadSchedDate){
-    try{
-      var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});
-      var zj=await zr.json();
-      if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
-    }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}
+    await zohoDeleteEvent("estimate",id);
   }
   toast("Unscheduled"+(hadSchedDate?" \u2014 calendar event removed":"")+" \u2014 back to needing a date");
   sv("sched");
@@ -2293,11 +2301,7 @@ async function cancelVisit(leadId){
   var hadVisit=!!l.visitDate;
   l.visitDate=null;
   if(hadVisit){
-    try{
-      var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"lead",id:leadId})});
-      var zj=await zr.json();
-      if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
-    }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"lead",id:leadId});}
+    await zohoDeleteEvent("lead",leadId);
   }
   await qUp("fir_leads",l2db(l));
   persistLocal();
@@ -2348,11 +2352,7 @@ async function deletePersonalEvent(id){
   if(!confirm("Delete this personal event?"))return;
   personalEvents=personalEvents.filter(function(p){return p.id!==id});
   renderSched();
-  try{
-    var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"personal",id:id})});
-    var zj=await zr.json();
-    if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}
-  }catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"personal",id:id});}
+  await zohoDeleteEvent("personal",id);
   await qDel("fir_personal_events",id);
   persistLocal();
   toast("Deleted");
