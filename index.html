@@ -1064,6 +1064,24 @@ async function markStat(stat){
     }else{
       toast("Status: declined"+(hadSchedDate?" \u2014 calendar event removed":""));
     }
+  }else if(stat==="approved"&&leadId){
+    // Mirror of the decline-side sibling check above, added September 24, 2026: once one
+    // option is approved, any other still-undecided estimate for the same lead (draft or
+    // sent only — never an estimate that's already approved/scheduled/in_progress/complete,
+    // which represents separately committed work, not a competing alternative) is
+    // auto-declined. Closes a real gap where estimate-followup would otherwise nag the
+    // customer about an option they already passed on, and stops a stale sibling from
+    // lingering in the open-records pool (Section 50) with nothing ever resolving it.
+    var siblingsDeclined=0;
+    for(var i=0;i<ests.length;i++){
+      if(ests[i].leadId===leadId&&ests[i].id!==id&&(ests[i].status==="draft"||ests[i].status==="sent")){
+        ests[i].status="declined";
+        await qUp("fir_estimates",e2db(ests[i]));
+        siblingsDeclined++;
+      }
+    }
+    if(siblingsDeclined>0)persistLocal();
+    toast("Status: approved"+(siblingsDeclined?" \u2014 "+siblingsDeclined+" other open estimate"+(siblingsDeclined>1?"s":"")+" for this lead declined automatically":""));
   }else{
     toast("Status: "+stat);
   }
