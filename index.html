@@ -162,7 +162,7 @@ textarea{resize:vertical;min-height:64px}
   </div>
   <div id="rpt-body"></div>
 </div>
-<div id="v-est" class="view"><div class="sh"><h2>Estimates</h2><button class="bp" onclick="openEF(null)">+ New</button></div><div class="card"><input id="est-search" placeholder="Search by name..." oninput="renderEL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="elist"></div><div id="est-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('est')">Load older records</button></div></div></div>
+<div id="v-est" class="view"><div class="sh"><h2>Estimates</h2><button class="bp" onclick="openEF(null)">+ New</button></div><div class="card"><input id="est-search" placeholder="Search by name or EST number..." oninput="renderEL()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box"><div id="elist"></div><div id="est-older" style="display:none;text-align:center;padding-top:8px"><button class="bs2" onclick="loadOlder('est')">Load older records</button></div></div></div>
 <div id="v-sched" class="view"><div class="sh"><h2>Schedule</h2><button class="bs2" onclick="openPersonalEventModal()">+ Personal Event</button></div><div class="card"><div id="schedlist"></div></div></div>
 <div id="v-ef" class="view">
   <div class="sh"><h2 id="eftitle">New Estimate</h2><button class="bs2" onclick="sv('est')">Back</button></div>
@@ -771,7 +771,70 @@ async function renderReports(){
 
   document.getElementById("rpt-body").innerHTML=html;
 }
-function renderEL(){var q=(document.getElementById("est-search")||{}).value||"";var list=[].concat(ests).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(e){return(e.customer||"").toLowerCase().includes(ql)||(e.estNum||"").toLowerCase().includes(ql);})}document.getElementById("elist").innerHTML=list.length?list.map(function(e){return'<div class="li"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+esc(e.estNum||"")+(e.customer?" - "+esc(e.customer):"")+"</div><div class=\"lim\">"+fmt(e.total)+" · "+new Date(e.created).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+e.status+"\">"+e.status+'</span><button class="db2" style="color:#dc3545;font-size:15px" onclick="event.stopPropagation();delEst(\''+e.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No estimates yet</div>';var older=document.getElementById("est-older");if(older)older.style.display=estAllLoaded?"none":"block";}
+// Estimates tab sections. The tab is a lookup list for estimates that have no other
+// home, so it's split by where an estimate lives, not by the full status chain (Pipeline
+// and Schedule already cover the workflow). Criteria:
+//  - "open": draft, sent, approved, scheduled, in_progress, complete — same meaning of
+//    "open" as the lazy-load window (not invoiced, not declined). Any unrecognized or
+//    missing status also lands here, so an odd record is shown rather than hidden.
+//  - "declined": turned down by the customer OR cancelled via Cancel Job (cancelJob() and
+//    markStat("declined") both end at this status). These usually belong to people who
+//    never became clients, so this tab is the only place they live.
+//  - invoiced + reachable in a client's history: hidden. Invoicing is what creates the
+//    client record (findOrCreateClient() in toInvoice()), so these are guaranteed a home.
+//    "Reachable" uses the exact same phone/email match as findClientHistory(), checked
+//    against actual client records, not just "has a phone" — a client matched by name
+//    only, or later edited to a different number, would otherwise strand the estimate.
+//  - "invoiced_orphan": invoiced but NOT reachable from any client's history (no phone or
+//    email, or no matching client). Kept visible so it never becomes unreachable.
+// Search ignores the hiding: a query shows matching estimates from every section, with
+// hidden invoiced ones in their own "invoiced" section. Display only — ests itself is
+// never filtered, so Dashboard stats and Reports are unaffected.
+var EST_GROUP_INFO={
+  open:{label:"Open",hint:"not yet invoiced or declined"},
+  declined:{label:"Declined",hint:"turned down or cancelled"},
+  invoiced_orphan:{label:"Invoiced, not in client history",hint:"no matching phone or email on a client"},
+  invoiced:{label:"Invoiced",hint:"also in the client's history"}
+};
+function estClientKeys(){
+  var phones={},emails={};
+  clients.forEach(function(c){var p=normPhone(c.phone),m=(c.email||"").toLowerCase().trim();if(p)phones[p]=1;if(m)emails[m]=1;});
+  return{phones:phones,emails:emails};
+}
+function estGroup(e,keys){
+  if(e.status==="declined")return"declined";
+  if(e.status==="invoiced"){
+    var p=normPhone(e.phone),m=(e.email||"").toLowerCase().trim();
+    return((p&&keys.phones[p])||(m&&keys.emails[m]))?"invoiced":"invoiced_orphan";
+  }
+  return"open";
+}
+function renderEL(){
+  var q=(document.getElementById("est-search")||{}).value||"";
+  var list=[].concat(ests).reverse();
+  if(q){var ql=q.toLowerCase();list=list.filter(function(e){return(e.customer||"").toLowerCase().includes(ql)||(e.estNum||"").toLowerCase().includes(ql);})}
+  var keys=estClientKeys();
+  var groups={open:[],declined:[],invoiced_orphan:[],invoiced:[]};
+  list.forEach(function(e){groups[estGroup(e,keys)].push(e);});
+  var hiddenCount=q?0:groups.invoiced.length;
+  var row=function(e){return'<div class="li"><div onclick="openEF(\''+e.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+esc(e.estNum||"")+(e.customer?" - "+esc(e.customer):"")+"</div><div class=\"lim\">"+fmt(e.total)+" · "+new Date(e.created).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+e.status+"\">"+e.status+'</span><button class="db2" style="color:#dc3545;font-size:15px" onclick="event.stopPropagation();delEst(\''+e.id+'\')" title="Delete">🗑</button></div></div>'};
+  var header=function(g,n,first){var info=EST_GROUP_INFO[g];return'<div class="ct" style="font-size:13px;color:var(--text);margin:'+(first?"0":"16px")+' 0 6px 4px;background:var(--bg);padding:6px 10px;border-radius:8px">'+info.label+" \u00b7 "+n+' <span style="font-weight:400;color:var(--faint)">\u2014 '+info.hint+'</span></div>'};
+  var order=q?["open","declined","invoiced_orphan","invoiced"]:["open","declined","invoiced_orphan"];
+  var html="",first=true;
+  order.forEach(function(g){
+    var rows=groups[g];
+    // Open always gets a header when not searching, even when empty, so "nothing open"
+    // reads as caught up rather than as a list that failed to load.
+    if(!rows.length&&!(g==="open"&&!q))return;
+    html+=header(g,rows.length,first);first=false;
+    html+=rows.length?rows.map(row).join(""):'<div class="es" style="padding:8px 0">No open estimates</div>';
+  });
+  if(q&&!list.length)html='<div class="es">No matches</div>';
+  else if(!q&&!ests.length)html='<div class="es">No estimates yet</div>';
+  if(hiddenCount)html+='<div class="lim" style="margin:14px 4px 0;color:var(--faint)">'+hiddenCount+" invoiced estimate"+(hiddenCount===1?" is":"s are")+" in client history. Search by name or EST number to find one here.</div>";
+  document.getElementById("elist").innerHTML=html;
+  var older=document.getElementById("est-older");if(older)older.style.display=estAllLoaded?"none":"block";
+}
 async function delEst(id){if(!confirm("Delete this estimate? This can't be undone."))return;var wasScheduled=false;for(var i=0;i<ests.length;i++){if(ests[i].id===id){wasScheduled=!!ests[i].schedDate;break}}ests=ests.filter(function(e){return e.id!==id});renderEL();toast("Estimate deleted");if(wasScheduled){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}}var ok=await qDel("fir_estimates",id);try{var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"};var listRes=await fetch(SURL+"/storage/v1/object/list/fir-photos",{method:"POST",headers:h,body:JSON.stringify({prefix:id+"/"})});var files=await listRes.json();if(Array.isArray(files)&&files.length){var paths=files.map(function(f){return id+"/"+f.name});await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:h,body:JSON.stringify({prefixes:paths})});}}catch(e){console.error("Photo cleanup failed:",e);}persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderIL(){var q=(document.getElementById("inv-search")||{}).value||"";var list=[].concat(invs).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(i){return(i.customer||"").toLowerCase().includes(ql)||(i.invNum||"").toLowerCase().includes(ql);})}document.getElementById("ilist").innerHTML=list.length?list.map(function(i){return'<div class="li"><div style="flex:1"><div class="lin">'+esc(i.invNum||"")+" - "+esc(i.customer||"")+"</div><div class=\"lim\">"+fmt(i.total)+" · Due "+new Date(i.dueDate).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+(i.paid?"paid":"unpaid")+"\">"+( i.paid?"paid":"unpaid")+"</span>"+(!i.paid?'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="markPaid(\''+i.id+'\')" >Mark Paid</button>':"")+'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="printInv(\''+i.id+'\')" >Print</button>'+(i.emailedAt?'<span class="badge sent" style="font-size:10px" title="Emailed '+new Date(i.emailedAt).toLocaleDateString()+' to '+esc(i.emailedTo)+'">\u2709\ufe0f sent</span><button class="bs2" style="padding:4px 9px;font-size:11px" onclick="if(confirm(\'Resend this invoice email?\'))emailInv(\''+i.id+'\')" >Resend</button>':'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="emailInv(\''+i.id+'\')" >Email</button>')+'<button class="db2" style="color:#dc3545;font-size:15px" onclick="delInv(\''+i.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No invoices yet</div>';var older=document.getElementById("inv-older");if(older)older.style.display=invAllLoaded?"none":"block";}
 async function delInv(id){if(!confirm("Delete this invoice? This can't be undone."))return;invs=invs.filter(function(i){return i.id!==id});renderIL();renderDB();toast("Invoice deleted");var ok=await qDel("fir_invoices",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
