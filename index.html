@@ -114,7 +114,7 @@ textarea{resize:vertical;min-height:64px}
   <button class="nb" onclick="sv('inv')">Invoices</button>
   <button class="nb" onclick="sv('cli')">Clients</button>
   <button class="nb" onclick="sv('exp')">Expenses</button>
-  <button class="nb" onclick="sv('leads')">Leads</button>
+  <button class="nb" onclick="sv('leads')">Pipeline</button>
   <button class="nb" onclick="sv('set')">Settings</button>
   <button class="nb" onclick="sv('coi')">Insurance</button>
   <button class="nb" onclick="openHowTo('')">How-To</button>
@@ -123,7 +123,7 @@ textarea{resize:vertical;min-height:64px}
   <div class="sg" id="dstats"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.85rem">
     <div class="card" style="margin:0"><div class="ct">Win Rate</div><div id="dwr" style="font-size:24px;font-weight:700;color:var(--g)">-</div><div class="wbar"><div class="wfill" id="dwf" style="width:0%"></div></div><div style="font-size:11px;color:var(--faint);margin-top:4px" id="dwsub">-</div></div>
-    <div class="card" style="margin:0"><div class="ct">Pipeline</div><div id="dpipe" style="font-size:12px;color:var(--muted);line-height:1.9"></div></div>
+    <div class="card" style="margin:0"><div class="ct">By Status</div><div id="dpipe" style="font-size:12px;color:var(--muted);line-height:1.9"></div></div>
   </div>
   
   <div class="owed-card" id="followup-section" style="display:none">
@@ -246,7 +246,7 @@ textarea{resize:vertical;min-height:64px}
 </div>
 
 <div id="v-leads" class="view">
-  <div class="sh"><h2>Leads</h2><div style="display:flex;gap:8px"><button class="bp" style="background:var(--bg);color:var(--g);border:1px solid #ddd" onclick="refreshLeads()" id="leadRefreshBtn">⟳ Refresh</button><button class="bp" onclick="toggleLF()">+ Add Lead</button></div></div>
+  <div class="sh"><h2>Pipeline</h2><div style="display:flex;gap:8px"><button class="bp" style="background:var(--bg);color:var(--g);border:1px solid #ddd" onclick="refreshLeads()" id="leadRefreshBtn">⟳ Refresh</button><button class="bp" onclick="toggleLF()">+ Add Lead</button></div></div>
   <div class="card" id="lform" style="display:none"><div class="ct" id="lform-title">New Lead</div>
     <input type="hidden" id="llid" autocomplete="off" autocorrect="off" autocapitalize="off">
     <div class="r2"><div class="mb"><label>Name</label><input id="lln" placeholder="Jane Smith" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Phone</label><div style="display:flex;gap:6px"><input id="llp" autocomplete="off" autocorrect="off" autocapitalize="off" style="flex:1"><button type="button" class="bs2" style="padding:0 12px" onclick="callFieldValue('llp')" title="Call">📞</button></div></div></div>
@@ -485,8 +485,8 @@ function db2i(r){return{id:r.id,invNum:r.inv_num,estId:r.est_id,estNum:r.est_num
 function c2db(c){return{id:c.id,name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",notes:c.notes||"",created_at:c.created||Date.now()};}
 function db2c(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,notes:r.notes||"",created:r.created_at};}
 
-function l2db(l){return{id:l.id,name:l.name||"",phone:l.phone||"",email:l.email||"",address:l.address||"",source:l.source||"",job_desc:l.jobDesc||"",notes:l.notes||"",status:l.status||"new",created_at:l.created||Date.now(),visit_date:l.visitDate||null,visit_duration_min:l.visitDurationMin||60,zoho_sync_ok:l.zohoSyncOk!==false};}
-function db2l(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,source:r.source,jobDesc:r.job_desc,notes:r.notes||"",status:r.status||"new",created:r.created_at,visitDate:r.visit_date||null,visitDurationMin:r.visit_duration_min||60,zohoSyncOk:r.zoho_sync_ok!==false};}
+function l2db(l){return{id:l.id,name:l.name||"",phone:l.phone||"",email:l.email||"",address:l.address||"",source:l.source||"",job_desc:l.jobDesc||"",notes:l.notes||"",status:l.status||"new",created_at:l.created||Date.now(),visit_date:l.visitDate||null,visit_duration_min:l.visitDurationMin||60,zoho_sync_ok:l.zohoSyncOk!==false,client_id:l.clientId||null};}
+function db2l(r){return{id:r.id,name:r.name,phone:r.phone,email:r.email,address:r.address,source:r.source,jobDesc:r.job_desc,notes:r.notes||"",status:r.status||"new",created:r.created_at,visitDate:r.visit_date||null,visitDurationMin:r.visit_duration_min||60,zohoSyncOk:r.zoho_sync_ok!==false,clientId:r.client_id||null};}
 function x2db(e){return{id:e.id,date:e.date||"",amount:e.amount||0,category:e.cat||"",description:e.desc||"",created_at:e.created||Date.now()};}
 function db2x(r){return{id:r.id,date:r.date,amount:+r.amount,cat:r.category,desc:r.description,created:r.created_at};}
 function pe2db(p){return{id:p.id,title:p.title||"",event_date:p.eventDate,duration_min:p.durationMin||60,created_at:p.created||Date.now(),zoho_sync_ok:p.zohoSyncOk!==false};}
@@ -716,8 +716,16 @@ async function renderReports(){
   // Collected total is bucketed by actual payment date (paidAt) when available, also filtered to range independently,
   // so a job invoiced last month but paid this month correctly counts as collected revenue this month.
   var revRows=revData.map(function(r){return[monthLabel(r.month_key),fmt(r.invoiced),fmt(r.collected),fmt(r.outstanding)]});
-  // Win rate trend by month, from estimates, filtered to range
-  var winRows=winData.map(function(r){var tot=r.won+r.lost;var pct=tot?Math.round(r.won/tot*100)+"%":"--";return[monthLabel(r.month_key),r.won,r.lost,pct]});
+  // Win rate trend by month, from estimates, filtered to range. Split between new
+  // leads and repeat client jobs (identified via a linked client record on the
+  // originating lead), so repeat business can't quietly prop up an otherwise flat
+  // new-business win rate without you noticing.
+  var winRows=winData.map(function(r){
+    var tot=r.won+r.lost;var pct=tot?Math.round(r.won/tot*100)+"%":"--";
+    var newTot=r.new_won+r.new_lost;var newPct=newTot?Math.round(r.new_won/newTot*100)+"%":"--";
+    var repTot=r.repeat_won+r.repeat_lost;var repPct=repTot?Math.round(r.repeat_won/repTot*100)+"%":"--";
+    return[monthLabel(r.month_key),r.won,r.lost,pct,r.new_won,r.new_lost,newPct,r.repeat_won,r.repeat_lost,repPct];
+  });
   // Lead source breakdown, filtered to range
   var sourceRows=sourceData.map(function(r){return[r.source,r.lead_count,r.pct_of_total+"%"]});
   // Job type / revenue mix, from estimates, filtered to range
@@ -733,7 +741,8 @@ async function renderReports(){
   html+="</div>";
 
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Win Rate Trend</h3>";
-  html+=winRows.length?rptTable(["Month","Won","Declined","Win Rate"],winRows):"<div class='es'>No estimates yet</div>";
+  html+="<div style='font-size:11px;color:#999;margin-bottom:8px'>Combined total, plus a split between new leads and repeat client jobs, so repeat business can't quietly inflate an otherwise flat new-business win rate.</div>";
+  html+=winRows.length?rptTable(["Month","Won","Declined","Win Rate","New Won","New Declined","New Win Rate","Repeat Won","Repeat Declined","Repeat Win Rate"],winRows):"<div class='es'>No estimates yet</div>";
   html+="</div>";
 
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Lead Source Breakdown</h3>";
@@ -755,7 +764,7 @@ function renderEL(){var q=(document.getElementById("est-search")||{}).value||"";
 async function delEst(id){if(!confirm("Delete this estimate? This can't be undone."))return;var wasScheduled=false;for(var i=0;i<ests.length;i++){if(ests[i].id===id){wasScheduled=!!ests[i].schedDate;break}}ests=ests.filter(function(e){return e.id!==id});renderEL();toast("Estimate deleted");if(wasScheduled){try{var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify({recordType:"estimate",id:id})});var zj=await zr.json();if(!zr.ok||!zj.ok){throw new Error((zj&&zj.error)||zr.status);}}catch(zerr){console.error("Zoho delete failed, will retry later:",zerr);queueWrite("zoho-delete-event","zoho-delete",{recordType:"estimate",id:id});}}var ok=await qDel("fir_estimates",id);try{var h={"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json"};var listRes=await fetch(SURL+"/storage/v1/object/list/fir-photos",{method:"POST",headers:h,body:JSON.stringify({prefix:id+"/"})});var files=await listRes.json();if(Array.isArray(files)&&files.length){var paths=files.map(function(f){return id+"/"+f.name});await fetch(SURL+"/storage/v1/object/fir-photos",{method:"DELETE",headers:h,body:JSON.stringify({prefixes:paths})});}}catch(e){console.error("Photo cleanup failed:",e);}persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderIL(){var q=(document.getElementById("inv-search")||{}).value||"";var list=[].concat(invs).reverse();if(q){var ql=q.toLowerCase();list=list.filter(function(i){return(i.customer||"").toLowerCase().includes(ql)||(i.invNum||"").toLowerCase().includes(ql);})}document.getElementById("ilist").innerHTML=list.length?list.map(function(i){return'<div class="li"><div style="flex:1"><div class="lin">'+esc(i.invNum||"")+" - "+esc(i.customer||"")+"</div><div class=\"lim\">"+fmt(i.total)+" · Due "+new Date(i.dueDate).toLocaleDateString()+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"badge "+(i.paid?"paid":"unpaid")+"\">"+( i.paid?"paid":"unpaid")+"</span>"+(!i.paid?'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="markPaid(\''+i.id+'\')" >Mark Paid</button>':"")+'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="printInv(\''+i.id+'\')" >Print</button>'+(i.emailedAt?'<span class="badge sent" style="font-size:10px" title="Emailed '+new Date(i.emailedAt).toLocaleDateString()+' to '+esc(i.emailedTo)+'">\u2709\ufe0f sent</span><button class="bs2" style="padding:4px 9px;font-size:11px" onclick="if(confirm(\'Resend this invoice email?\'))emailInv(\''+i.id+'\')" >Resend</button>':'<button class="bs2" style="padding:4px 9px;font-size:11px" onclick="emailInv(\''+i.id+'\')" >Email</button>')+'<button class="db2" style="color:#dc3545;font-size:15px" onclick="delInv(\''+i.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No invoices yet</div>';var older=document.getElementById("inv-older");if(older)older.style.display=invAllLoaded?"none":"block";}
 async function delInv(id){if(!confirm("Delete this invoice? This can't be undone."))return;invs=invs.filter(function(i){return i.id!==id});renderIL();renderDB();toast("Invoice deleted");var ok=await qDel("fir_invoices",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
-function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";var list=clients;if(q){var ql=q.toLowerCase();list=list.filter(function(c){return(c.name||"").toLowerCase().includes(ql)||(c.phone||"").toLowerCase().includes(ql);})}document.getElementById("clist").innerHTML=list.length?list.map(function(c){return'<div class="li"><div onclick="editClient(\''+c.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+esc(c.name)+(c.notes?' <span title="'+esc(c.notes)+'">📝</span>':'')+'</div><div class="lim">'+telLink(c.phone||"")+' '+esc(c.email||"")+'</div></div><div style="display:flex;gap:6px;align-items:center"><button class="bs2" style="padding:4px 9px;font-size:11px" onclick="event.stopPropagation();estFromClient(\''+c.id+'\')" >+ Est</button><button class="db2" style="color:#dc3545;font-size:15px" onclick="event.stopPropagation();delClient(\''+c.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No clients</div>'}
+function renderCL(){var q=(document.getElementById("cli-search")||{}).value||"";var list=clients;if(q){var ql=q.toLowerCase();list=list.filter(function(c){return(c.name||"").toLowerCase().includes(ql)||(c.phone||"").toLowerCase().includes(ql);})}document.getElementById("clist").innerHTML=list.length?list.map(function(c){return'<div class="li"><div onclick="editClient(\''+c.id+'\')" style="cursor:pointer;flex:1"><div class="lin">'+esc(c.name)+(c.notes?' <span title="'+esc(c.notes)+'">📝</span>':'')+'</div><div class="lim">'+telLink(c.phone||"")+' '+esc(c.email||"")+'</div></div><div style="display:flex;gap:6px;align-items:center"><button class="bp" style="padding:4px 9px;font-size:11px" onclick="event.stopPropagation();newJobFromClient(\''+c.id+'\')">+ New Job</button><button class="db2" style="color:#dc3545;font-size:15px" onclick="event.stopPropagation();delClient(\''+c.id+'\')" title="Delete">🗑</button></div></div>'}).join(""):q?'<div class="es">No matches</div>':'<div class="es">No clients</div>'}
 async function delClient(id){if(!confirm("Delete this client? This can't be undone."))return;clients=clients.filter(function(c){return c.id!==id});renderCL();toast("Client deleted");var ok=await qDel("fir_clients",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
 function renderXL(){var total=exps.reduce(function(a,e){return a+(+e.amount||0)},0);document.getElementById("exlist").innerHTML=exps.length?"<div style=\"font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600\">Total: "+fmt(total)+"</div>"+[].concat(exps).reverse().map(function(e){return"<div class=\"li\"><div onclick=\"editExpense('"+e.id+"')\" style=\"cursor:pointer;flex:1\"><div class=\"lin\">"+esc(e.desc||e.cat)+"</div><div class=\"lim\">"+esc(e.cat)+" · "+esc(e.date)+"</div></div><div style=\"display:flex;gap:6px;align-items:center\"><span class=\"lia\">"+fmt(e.amount)+"</span><button class=\"db2\" style=\"color:#dc3545;font-size:15px\" onclick=\"event.stopPropagation();delExp('"+e.id+"')\" title=\"Delete\">🗑</button></div></div>"}).join(""):"<div class=\"es\">No expenses</div>";var older=document.getElementById("exp-older");if(older)older.style.display=expAllLoaded?"none":"block";}
 async function delExp(id){if(!confirm("Delete this expense? This can't be undone."))return;exps=exps.filter(function(e){return e.id!==id});renderXL();toast("Expense deleted");var ok=await qDel("fir_expenses",id);persistLocal();if(!ok)toast("Deleted locally — will sync when back online");}
@@ -1415,7 +1424,26 @@ function editClient(id){var c=null;for(var i=0;i<clients.length;i++){if(clients[
 function toggleEF(){var f=document.getElementById("eform");if(f.style.display==="none"){["exid","exa","exn"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("exc").selectedIndex=0;document.getElementById("exd").value=new Date().toISOString().split("T")[0];document.getElementById("eform-title").textContent="New Expense";f.style.display="block";}else{f.style.display="none";}}
 function editExpense(id){var x=null;for(var i=0;i<exps.length;i++){if(exps[i].id===id){x=exps[i];break}}if(!x)return;document.getElementById("exid").value=x.id;document.getElementById("exd").value=x.date||"";document.getElementById("exa").value=x.amount||"";document.getElementById("exc").value=x.cat||"Materials";document.getElementById("exn").value=x.desc||"";document.getElementById("eform-title").textContent="Edit Expense";document.getElementById("eform").style.display="block";}
 async function saveClient(){var name=document.getElementById("cln").value.trim();if(!name){toast("Name required");return}var id=document.getElementById("clid").value;var phone=document.getElementById("clp").value;var email=document.getElementById("cle").value;var address=document.getElementById("cla").value;var notes=document.getElementById("clnotes").value;if(id){var existing=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){existing=clients[i];break}}if(existing){existing.name=name;existing.phone=phone;existing.email=email;existing.address=address;existing.notes=notes;await qUp("fir_clients",c2db(existing));}}else{var dup=findClientMatch(phone,email,name);if(dup){if(!confirm("This looks like an existing client: "+(dup.name||"")+". Open that record instead of creating a new one?")){return}document.getElementById("cform").style.display="none";editClient(dup.id);return;}var nc={id:uid(),name:name,phone:phone,email:email,address:address,notes:notes,created:Date.now()};clients.push(nc);await qUp("fir_clients",c2db(nc));}persistLocal();["clid","cln","clp","cle","cla","clnotes"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("cform").style.display="none";renderCL();toast("Client saved!")}
-function estFromClient(id){var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}if(!c)return;openEF(null);document.getElementById("fcn").value=c.name||"";document.getElementById("fcp").value=c.phone||"";document.getElementById("fce").value=c.email||"";document.getElementById("fca").value=c.address||""}
+// Starts a new job for an existing client through the same Pipeline every other
+// request flows through, instead of the old estFromClient() shortcut that created a
+// bare, disconnected estimate invisible to leadWorkflowGroup(), the Dashboard's
+// panels, and the returning-client badge logic. Starts at "contacted", not "new" —
+// this isn't a first contact, so it correctly skips "Awaiting your action" and (once
+// lead-ack is updated to check clientId) the "nice to meet you" email a stranger
+// would get. clientId links this request directly back to the client record, rather
+// than relying on phone/email matching to reconnect them later.
+async function newJobFromClient(id){
+  var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}
+  if(!c)return;
+  var nl={id:uid(),name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",source:"Repeat client",jobDesc:"",notes:"",status:"contacted",created:Date.now(),clientId:c.id};
+  leads.push(nl);
+  await qUp("fir_leads",l2db(nl));
+  persistLocal();
+  renderLL();renderDB();
+  toast("New job started for "+(c.name||"client"));
+  sv("leads");
+  convertLead(nl.id);
+}
 async function saveExp(){
   var amt=+(document.getElementById("exa").value);
   if(!amt){toast("Amount required");return}
