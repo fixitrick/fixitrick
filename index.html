@@ -134,6 +134,10 @@ textarea{resize:vertical;min-height:64px}
     <div class="ct">Approved — Not Yet Scheduled</div>
     <div id="unscheduled-list"></div>
   </div>
+  <div class="owed-card" id="unsent-section" style="display:none">
+    <div class="ct">Invoices Not Yet Emailed</div>
+    <div id="unsent-list"></div>
+  </div>
   <div class="owed-card" id="owed-section" style="display:none">
     <div class="ct">Outstanding Invoices — What You're Owed</div>
     <div id="owed-list"></div>
@@ -818,6 +822,19 @@ function renderDB(){
     return "<div class='owed-row' style='"+border+";padding-left:8px;cursor:pointer' onclick='openEF(\""+e.id+"\")'><div style='flex:1'><div class='lin'>"+esc(e.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>"+age+"</span></div><div class='lim'>"+esc(e.estNum||"")+" \u00b7 "+fmt(e.total)+"</div></div></div>";
   }).join(""):"<div class='es' style='padding:1rem'>Nothing approved and unscheduled.</div>";
 
+  // Invoices not yet emailed (v53, September 24, 2026). The safety net behind the
+  // email prompt at invoicing: catches an invoice where "Not now" was chosen, one with
+  // no email on file, or one created while its write was queued offline. Unpaid only —
+  // a paid invoice needs no chasing — and every unpaid invoice is always loaded, so
+  // this list is always complete. Same always-visible pattern as the sections above.
+  var unsent=invs.filter(function(i){return!i.paid&&!i.emailedAt}).sort(function(a,b){return a.created-b.created});
+  document.getElementById("unsent-section").style.display="block";
+  document.getElementById("unsent-list").innerHTML=unsent.length?unsent.map(function(i){
+    var age=ageLabel(i.created);
+    var action=i.email?"<button class='bs2' style='padding:4px 9px;font-size:11px' onclick='emailInvFromDash(\""+i.id+"\")'>Email</button>":"<span class='lim' style='color:#dc3545'>No email on file</span>";
+    return "<div class='owed-row' style='"+ageBorder(i.created)+";padding-left:8px'><div style='flex:1'><div class='lin'>"+esc(i.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>"+age+"</span></div><div class='lim'>"+esc(i.invNum||"")+" \u00b7 "+fmt(i.balance||i.total)+"</div></div><div style='display:flex;gap:6px;align-items:center'>"+action+"</div></div>";
+  }).join(""):"<div class='es' style='padding:1rem'>Every unpaid invoice has been emailed.</div>";
+
   // Outstanding invoices detail
   var unpaid=invs.filter(function(i){return!i.paid}).sort(function(a,b){return a.dueDate-b.dueDate});
   var owedSec=document.getElementById("owed-section");
@@ -1413,11 +1430,12 @@ async function toInvoice(){
     S.nextInv=claim.num+1;// mirror what the RPC stored, so the settings save below agrees with it
     var due=new Date();due.setDate(due.getDate()+((S.due===undefined||S.due===null)?30:S.due));
     var inv={id:uid(),invNum:num,estId:d.id,estNum:d.estNum,customer:d.customer,phone:d.phone,email:d.email,address:d.address,total:d.total,balance:d.balance,deposit:d.deposit,notes:d.notes,mats:d.mats,labs:d.labs,photos:d.photos,paid:false,dueDate:due.getTime(),created:Date.now()};
+    var invSaved=true;// false when the invoice write had to be queued (see below)
     try{await sbUp("fir_invoices",i2db(inv));}
     catch(err){
       var msg=String(err&&err.message||err);
       if(/23505|duplicate key/i.test(msg)){console.error("Invoice rejected as duplicate:",msg);toast("Invoice "+num+" was rejected as a duplicate. Nothing was changed \u2014 please try again.");return}
-      console.error("Invoice write failed, queued:",err);queueWrite("fir_invoices","upsert",i2db(inv));
+      console.error("Invoice write failed, queued:",err);queueWrite("fir_invoices","upsert",i2db(inv));invSaved=false;
     }
     // Invoice is written (or safely queued) — now apply the local and follow-on changes.
     invs.push(inv);
@@ -1432,6 +1450,16 @@ async function toInvoice(){
     persistLocal();
     toast("Invoice "+num+" created!"+(d.leadId?" Linked lead marked won.":""));
     sv("inv");
+    // Prompt to email it now (v52, September 24, 2026). Invoicing has never sent the
+    // invoice by itself; it's a separate tap on the Invoices tab, which is easy to
+    // forget. Asking here keeps Rick in control of timing ("Not now" / Cancel leaves it
+    // unsent, and the Email button is still on the invoice). Only offered when the
+    // invoice actually reached the server, since the email function reads it from there.
+    if(invSaved&&inv.email){
+      if(await askEmailNow(num,inv.email)){await emailInv(inv.id);renderDB();}
+    }else if(invSaved){
+      toast("Invoice "+num+" created \u2014 no email on file, so it hasn't been sent");
+    }
   }finally{
     invoiceLock=false;if(invBtn)invBtn.disabled=false;
   }
@@ -2026,6 +2054,29 @@ function showEmailStatus(ts,to){
   var el=document.getElementById("email-display");
   if(el&&ts){el.innerHTML="\u2709\ufe0f Emailed "+new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+" to "+esc(to)+" <button id=\"btn-resend\" onclick=\"if(confirm('Resend this estimate email?'))emailEst()\" style=\"margin-left:8px;font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid #155724;background:transparent;color:#155724;cursor:pointer\">Resend</button>";el.style.display="block";}
   var btn=document.getElementById("btn-email");if(btn)btn.style.display="none";
+}
+async function emailInvFromDash(id){await emailInv(id);renderDB();}
+// "Email it now?" prompt after invoicing (v53). An in-app dialog rather than the
+// browser's confirm(), so the choices read "Send" and "Not now" (not an ambiguous
+// OK/Cancel) and no web address appears as its title in the installed app. Resolves
+// true for Send; false for Not now, a tap outside, or Escape.
+function askEmailNow(invNum,email){
+  return new Promise(function(resolve){
+    var old=document.getElementById("emailnow-ov");if(old)old.remove();
+    var ov=document.createElement("div");ov.id="emailnow-ov";
+    ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px";
+    ov.innerHTML='<div class="card" role="dialog" aria-modal="true" aria-labelledby="emailnow-t" style="max-width:380px;width:100%;margin:0">'+
+      '<div class="ct" id="emailnow-t" style="margin-bottom:6px">Invoice '+esc(invNum)+' created</div>'+
+      '<div style="font-size:14px;color:var(--text);margin-bottom:14px">Email it to <strong>'+esc(email)+'</strong> now?</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="bs2" id="emailnow-no">Not now</button><button class="bp" id="emailnow-yes">Send</button></div></div>';
+    var done=function(v){document.removeEventListener("keydown",onKey);ov.remove();resolve(v);};
+    var onKey=function(ev){if(ev.key==="Escape")done(false);};
+    ov.addEventListener("click",function(ev){if(ev.target===ov)done(false);});
+    document.addEventListener("keydown",onKey);
+    document.body.appendChild(ov);
+    document.getElementById("emailnow-no").onclick=function(){done(false);};
+    var yes=document.getElementById("emailnow-yes");yes.onclick=function(){done(true);};yes.focus();
+  });
 }
 async function emailInv(id){
   var inv=null;for(var i=0;i<invs.length;i++){if(invs[i].id===id){inv=invs[i];break}}
