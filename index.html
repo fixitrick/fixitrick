@@ -698,16 +698,17 @@ async function renderReports(){
   var body=document.getElementById("rpt-body");
   body.innerHTML="<div class='card'><div class='es'>Loading reports...</div></div>";
   var range=rptRange();
-  var revData,winData,sourceData,catData,expCatData;
+  var revData,winData,sourceData,catData,expCatData,growthData;
   try{
     var results=await Promise.all([
       rptRpc("rpt_revenue_by_month",range),
       rptRpc("rpt_win_rate",range),
       rptRpc("rpt_lead_source_breakdown",range),
       rptRpc("rpt_job_type_mix",range),
-      rptRpc("rpt_expenses_by_category",range)
+      rptRpc("rpt_expenses_by_category",range),
+      rptRpc("rpt_client_growth",range)
     ]);
-    revData=results[0];winData=results[1];sourceData=results[2];catData=results[3];expCatData=results[4];
+    revData=results[0];winData=results[1];sourceData=results[2];catData=results[3];expCatData=results[4];growthData=results[5];
   }catch(e){
     body.innerHTML="<div class='card'><div class='es'>Couldn't load reports. Check your connection and reopen Reports to retry.</div></div>";
     return;
@@ -726,6 +727,11 @@ async function renderReports(){
     var repTot=r.repeat_won+r.repeat_lost;var repPct=repTot?Math.round(r.repeat_won/repTot*100)+"%":"--";
     return[monthLabel(r.month_key),r.won,r.lost,pct,r.new_won,r.new_lost,newPct,r.repeat_won,r.repeat_lost,repPct];
   });
+  // New leads vs. repeat client jobs, by month — the crossover this is meant to
+  // surface (new inquiries shrinking as the client base grows) only shows up as a
+  // trend over many months, so this is a running month-by-month view like Revenue
+  // and Win Rate above, not a single-period snapshot like the Source Breakdown below.
+  var growthRows=growthData.map(function(r){var tot=(+r.new_leads)+(+r.repeat_jobs);var pct=tot?Math.round(r.repeat_jobs/tot*100)+"%":"--";return[monthLabel(r.month_key),r.new_leads,r.repeat_jobs,pct]});
   // Lead source breakdown, filtered to range
   var sourceRows=sourceData.map(function(r){return[r.source,r.lead_count,r.pct_of_total+"%"]});
   // Job type / revenue mix, from estimates, filtered to range
@@ -743,6 +749,11 @@ async function renderReports(){
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Win Rate Trend</h3>";
   html+="<div style='font-size:11px;color:#999;margin-bottom:8px'>Combined total, plus a split between new leads and repeat client jobs, so repeat business can't quietly inflate an otherwise flat new-business win rate.</div>";
   html+=winRows.length?rptTable(["Month","Won","Declined","Win Rate","New Won","New Declined","New Win Rate","Repeat Won","Repeat Declined","Repeat Win Rate"],winRows):"<div class='es'>No estimates yet</div>";
+  html+="</div>";
+
+  html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>New Leads vs. Repeat Client Jobs</h3>";
+  html+="<div style='font-size:11px;color:#999;margin-bottom:8px'>Tracks the mix shifting over time as the client base grows — watch % Repeat climb as new-inquiry volume naturally slows.</div>";
+  html+=growthRows.length?rptTable(["Month","New Leads","Repeat Jobs","% Repeat"],growthRows):"<div class='es'>No leads yet</div>";
   html+="</div>";
 
   html+="<div class='card' style='margin-bottom:12px'><h3 style='margin-top:0'>Lead Source Breakdown</h3>";
