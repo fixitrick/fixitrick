@@ -1171,6 +1171,13 @@ function leadWorkflowGroup(l){
   // "in_progress" (crew's there now), and "complete" (done, not yet invoiced —
   // this is the one state that means Rick needs to act, not the customer, so it
   // gets its own bucket rather than falling through to the "waiting" default).
+  // "waiting" and "not_yet_quoted" were both this same catch-all bucket until
+  // September 23, 2026 — but they're opposite situations: an open estimate means
+  // the ball's genuinely in the customer's court, while "contacted, nothing sent
+  // yet" means the opposite — it's Rick's move, not theirs. That mislabeling was
+  // invisible for a normal lead (usually resolved within the same sitting) but
+  // became the guaranteed landing spot for every client "New Job", which always
+  // starts at "contacted" with nothing sent — split apart once that made it obvious.
   if(l.status==="lost")return"lost";
   var js=leadJobStatus(l.id);
   if(js){
@@ -1186,7 +1193,7 @@ function leadWorkflowGroup(l){
   if(leadHasOpenEstimate(l.id))return"waiting";
   if(l.visitDate)return"visit";
   if(l.status==="new")return"action";
-  return"waiting";// contacted or quoted, nothing booked yet — waiting on them, not you
+  return"not_yet_quoted";// contacted, nothing sent or booked yet — this one's on Rick, not them
 }
 function leadNeedsAction(l){return leadWorkflowGroup(l)==="action";}
 // Single source of truth for every Leads-tab section: its label and a short, few-word
@@ -1195,6 +1202,7 @@ function leadNeedsAction(l){return leadWorkflowGroup(l)==="action";}
 // to leadWorkflowGroup(), the function that actually decides what goes where.
 var GROUP_INFO={
   action:{label:"Awaiting your action",hint:"nobody's contacted yet"},
+  not_yet_quoted:{label:"Needs your next step",hint:"contacted, nothing sent yet"},
   job_needs_schedule:{label:"Job needs scheduling",hint:"approved, no date yet"},
   job_scheduled:{label:"Job scheduled",hint:"date's on the calendar"},
   job_in_progress:{label:"Job in progress",hint:"crew's there now"},
@@ -1248,7 +1256,7 @@ function renderLL(){
   var pinned=list.filter(leadNeedsAction).sort(function(a,b){return a.created-b.created;});
   var rest=list.filter(function(l){return !leadNeedsAction(l);});
 
-  var groupOrder={job_needs_schedule:0,job_scheduled:1,job_in_progress:2,job_ready_invoice:3,visit:4,waiting:5,lost:6};
+  var groupOrder={job_needs_schedule:0,not_yet_quoted:1,job_scheduled:2,job_in_progress:3,job_ready_invoice:4,visit:5,waiting:6,lost:7};
   rest=rest.sort(function(a,b){return(groupOrder[leadWorkflowGroup(a)]||0)-(groupOrder[leadWorkflowGroup(b)]||0)||(b.created-a.created)});
 
   var groupCounts={};rest.forEach(function(l){var g=leadWorkflowGroup(l);groupCounts[g]=(groupCounts[g]||0)+1;});
@@ -1432,6 +1440,11 @@ async function saveClient(){var name=document.getElementById("cln").value.trim()
 // lead-ack checks client_id (fixed September 23, 2026), the "nice to meet you" email
 // a stranger would get. clientId links this request directly back to the client
 // record, rather than relying on phone/email matching to reconnect them later.
+// Deliberately does NOT jump straight into the estimate form — a returning client
+// might need a visit first, same as any lead can. Lands on the Pipeline tab instead,
+// where the new entry sits under "Waiting to hear back" (sorted newest-first within
+// that group, so it's right at the top) with both the Visit and Estimate buttons
+// available, same choice a brand-new lead already offers.
 async function newJobFromClient(id){
   var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}
   if(!c)return;
@@ -1440,9 +1453,8 @@ async function newJobFromClient(id){
   await qUp("fir_leads",l2db(nl));
   persistLocal();
   renderLL();renderDB();
-  toast("New job started for "+(c.name||"client"));
+  toast("New job started for "+(c.name||"client")+" \u2014 schedule a visit or create an estimate below");
   sv("leads");
-  convertLead(nl.id);
 }
 async function saveExp(){
   var amt=+(document.getElementById("exa").value);
