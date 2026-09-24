@@ -428,10 +428,20 @@ var ests=[],invs=[],clients=[],exps=[],leads=[],mats=[],labs=[],photos=[],pendin
 var estAllLoaded=false,invAllLoaded=false,leadAllLoaded=false,expAllLoaded=false;
 
 // Supabase helpers
-async function sbUp(table,row){var r=await fetch(SURL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify(row)});if(!r.ok)throw new Error(await r.text());}
-async function sbDel(table,id){var r=await fetch(SURL+"/rest/v1/"+table+"?id=eq."+id,{method:"DELETE",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});if(!r.ok)throw new Error(await r.text());}
+async function sbUp(table,row){var r=await fetch(SURL+"/rest/v1/"+table,{method:"POST",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify(row)});if(!r.ok){var er=new Error(await r.text());er.status=r.status;throw er;}}
+async function sbDel(table,id){var r=await fetch(SURL+"/rest/v1/"+table+"?id=eq."+id,{method:"DELETE",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});if(!r.ok){var er=new Error(await r.text());er.status=r.status;throw er;}}
 
-function syncBadge(msg,ok){var el=document.getElementById("synclbl");if(el){el.textContent=msg;el.style.color=ok===true?"#155724":ok===false?"#721c24":"#999";}}
+function syncBadge(msg,ok){
+  var el=document.getElementById("synclbl");if(!el)return;
+  // A change the server permanently rejected stays flagged here, whatever else is
+  // happening, until it's retried or discarded (see failedQueue below).
+  var nf=(typeof failedQueue!=="undefined"&&failedQueue)?failedQueue.length:0;
+  if(nf){
+    msg=(msg==="Synced"?"":msg+" \u00b7 ")+nf+" change"+(nf===1?"":"s")+" couldn't save \u2014 tap";
+    ok=false;el.style.cursor="pointer";el.style.textDecoration="underline";el.onclick=showFailedChanges;
+  }else{el.style.cursor="";el.style.textDecoration="";el.onclick=null;}
+  el.textContent=msg;el.style.color=ok===true?"#155724":ok===false?"#721c24":"#999";
+}
 
 // --- Offline write queue ---
 var Q_KEY="fir:queue";
@@ -447,31 +457,134 @@ function queueWrite(table,op,data){
   qSave(pendingQueue);
   updateSyncIndicator();
 }
-async function flushQueue(){
-  if(!pendingQueue.length)return;
-  var q=pendingQueue.slice();
-  for(var i=0;i<q.length;i++){
-    var item=q[i];
-    try{
-      if(item.op==="upsert"){await sbUp(item.table,item.data);}
-      else if(item.op==="zoho-delete"){
-        var zr=await fetch(SURL+"/functions/v1/zoho-delete-event",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify(item.data)});
-        var zj=await zr.json();
-        if(!zr.ok||!zj.ok){throw new Error("Zoho delete retry failed: "+((zj&&zj.error)||zr.status));}
-      }
-      else if(item.op==="zoho-lead-visit"){
-        var zvr=await fetch(SURL+"/functions/v1/zoho-lead-visit",{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify(item.data)});
-        var zvj=await zvr.json();
-        if(!zvr.ok||!zvj.ok){throw new Error("Zoho visit retry failed: "+((zvj&&zvj.error)||zvr.status));}
-        for(var li=0;li<leads.length;li++){if(leads[li].id===item.data.leadId){leads[li].zohoSyncOk=true;break}}
-      }
-      else{await sbDel(item.table,item.data);}
-      pendingQueue=pendingQueue.filter(function(x){return x.qid!==item.qid});
-      qSave(pendingQueue);
-    }catch(e){console.error("Flush stopped:",e);break;}
-  }
-  updateSyncIndicator();
+// --- Set-aside ("couldn't save") list, v50 (September 24, 2026) ---
+// flushQueue() sends queued changes in order and stops at the first failure, so they
+// go through in the right order once the problem clears. That's right for TEMPORARY
+// failures (no connection, server trouble, expired sign-in), but a change the server
+// PERMANENTLY rejects would fail every 30 seconds forever and hold up everything behind
+// it (the Section 43.4 incident). Such a change is now moved to this separate list on
+// the device, flagged in the sync label, and the rest of the queue carries on. Nothing
+// is lost: it stays here until Retry or Discard. Safe because every save sends the
+// whole record, so skipping one failed change can't corrupt any other record.
+var F_KEY="fir:queue-failed";
+function fLoad(){try{return JSON.parse(localStorage.getItem(F_KEY))||[]}catch(e){return []}}
+function fSave(q){try{localStorage.setItem(F_KEY,JSON.stringify(q));}catch(e){console.error("Failed-list save failed:",e);}}
+var failedQueue=fLoad();
+// Permanent = the server answered with a 4xx that retrying can't fix (bad request, not
+// found, conflict, duplicate). Treated as TEMPORARY, so the queue keeps waiting as
+// before: no HTTP status at all (network down), 5xx, 401/403 (sign-in or permission,
+// which a fresh sign-in can fix), 408 (timeout), 425, and 429 (rate limit). When in
+// doubt it waits, which is the old, safe behavior.
+function isPermanentFailure(err){
+  var st=err&&err.status;
+  if(!st)return false;
+  if(st===401||st===403||st===408||st===425||st===429)return false;
+  return st>=400&&st<500;
 }
+async function callQueuedFn(fn,data,label){
+  var r=await fetch(SURL+"/functions/v1/"+fn,{method:"POST",headers:{"Authorization":"Bearer "+ATOKEN,"apikey":SKEY,"Content-Type":"application/json"},body:JSON.stringify(data)});
+  var txt=await r.text(),j=null;try{j=JSON.parse(txt);}catch(e){}
+  if(!r.ok){var er=new Error(label+" retry failed: "+((j&&j.error)||txt||r.status));er.status=r.status;throw er;}
+  // A 2xx that reports ok:false is the function's own temporary failure (e.g. Zoho
+  // unreachable) — no status attached, so it keeps waiting, exactly as before.
+  if(!j||!j.ok)throw new Error(label+" retry failed: "+((j&&j.error)||"no ok flag"));
+  return j;
+}
+var flushing=false;// one flush at a time: the 30-second timer, reconnecting, and a
+// successful save can each start one, and overlapping runs could send a change twice
+async function flushQueue(){
+  if(flushing||!pendingQueue.length)return;
+  flushing=true;
+  try{
+    var q=pendingQueue.slice();
+    for(var i=0;i<q.length;i++){
+      var item=q[i];
+      try{
+        if(item.op==="upsert"){await sbUp(item.table,item.data);}
+        else if(item.op==="zoho-delete"){await callQueuedFn("zoho-delete-event",item.data,"Zoho delete");}
+        else if(item.op==="zoho-lead-visit"){
+          await callQueuedFn("zoho-lead-visit",item.data,"Zoho visit");
+          for(var li=0;li<leads.length;li++){if(leads[li].id===item.data.leadId){leads[li].zohoSyncOk=true;break}}
+        }
+        else{await sbDel(item.table,item.data);}
+        pendingQueue=pendingQueue.filter(function(x){return x.qid!==item.qid});
+        qSave(pendingQueue);
+      }catch(e){
+        if(isPermanentFailure(e)){
+          console.error("Set aside, server rejected this change:",e);
+          failedQueue.push(Object.assign({},item,{failedAt:Date.now(),status:e.status,error:String(e.message||e).slice(0,400)}));
+          fSave(failedQueue);
+          pendingQueue=pendingQueue.filter(function(x){return x.qid!==item.qid});
+          qSave(pendingQueue);
+          continue;
+        }
+        console.error("Flush stopped:",e);break;
+      }
+    }
+  }finally{
+    flushing=false;
+    updateSyncIndicator();
+  }
+}
+// Plain-language description of a queued change, for the "couldn't save" list.
+var Q_TABLE_NAMES={fir_estimates:"Estimate",fir_invoices:"Invoice",fir_leads:"Lead",fir_clients:"Client",fir_expenses:"Expense",fir_personal_events:"Personal event",fir_settings:"Settings","zoho-delete-event":"Calendar removal","zoho-lead-visit":"Calendar visit"};
+function describeQueued(it){
+  var kind=Q_TABLE_NAMES[it.table]||it.table;
+  if(it.op==="delete")return"Delete "+kind.toLowerCase()+" ("+it.data+")";
+  if(it.op==="zoho-delete"||it.op==="zoho-lead-visit")return kind+" sync";
+  var d=it.data||{};
+  var bits=[d.est_num,d.inv_num,d.customer,d.name,d.title,d.description].filter(function(x){return x}).slice(0,2);
+  return kind+(bits.length?": "+bits.join(", "):"");
+}
+// Retry resends the record as it is NOW in the app, when it's loaded, rather than the
+// old snapshot — otherwise retrying a stale change could undo a newer save that went
+// through while this one sat on the list. Falls back to the snapshot otherwise.
+var Q_CURRENT={
+  fir_estimates:function(id){var r=ests.find(function(x){return x.id===id});return r?e2db(r):null},
+  fir_invoices:function(id){var r=invs.find(function(x){return x.id===id});return r?i2db(r):null},
+  fir_leads:function(id){var r=leads.find(function(x){return x.id===id});return r?l2db(r):null},
+  fir_clients:function(id){var r=clients.find(function(x){return x.id===id});return r?c2db(r):null},
+  fir_expenses:function(id){var r=exps.find(function(x){return x.id===id});return r?x2db(r):null},
+  fir_personal_events:function(id){var r=personalEvents.find(function(x){return x.id===id});return r?pe2db(r):null},
+  fir_settings:function(){return{id:"main",data:Object.assign({},S)}}
+};
+function retryFailedChange(qid){
+  var it=failedQueue.find(function(x){return x.qid===qid});if(!it)return;
+  failedQueue=failedQueue.filter(function(x){return x.qid!==qid});fSave(failedQueue);
+  var data=it.data;
+  if(it.op==="upsert"&&Q_CURRENT[it.table]){var cur=Q_CURRENT[it.table](it.data&&it.data.id);if(cur)data=cur;}
+  pendingQueue.push({qid:uid(),table:it.table,op:it.op,data:data,ts:Date.now()});qSave(pendingQueue);
+  closeFailedChanges();updateSyncIndicator();flushQueue();
+  toast("Retrying\u2026");
+}
+function discardFailedChange(qid){
+  if(!confirm("Discard this change? The server keeps its current version of the record. Close and reopen the app to see what the server has."))return;
+  failedQueue=failedQueue.filter(function(x){return x.qid!==qid});fSave(failedQueue);
+  closeFailedChanges();updateSyncIndicator();
+  if(failedQueue.length)showFailedChanges();
+  toast("Change discarded");
+}
+// Database errors arrive as JSON; show just their message when there is one.
+function readableError(t){try{var j=JSON.parse(t);return(j&&(j.message||j.error))||t||"";}catch(e){return t||"";}}
+function closeFailedChanges(){var ov=document.getElementById("failedq-ov");if(ov)ov.remove();}
+function showFailedChanges(){
+  closeFailedChanges();if(!failedQueue.length){updateSyncIndicator();return;}
+  var ov=document.createElement("div");ov.id="failedq-ov";
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px";
+  ov.onclick=function(ev){if(ev.target===ov)closeFailedChanges();};
+  var rows=failedQueue.map(function(it){
+    return'<div style="border-top:1px solid var(--border);padding:10px 0"><div class="lin">'+esc(describeQueued(it))+'</div>'+
+      '<div class="lim" style="margin:3px 0 8px">Saved '+new Date(it.ts).toLocaleString()+' \u00b7 server said: '+esc((it.status?it.status+" \u2014 ":"")+readableError(it.error))+'</div>'+
+      '<div style="display:flex;gap:8px"><button class="bp" style="padding:7px 12px" onclick="retryFailedChange(\''+it.qid+'\')">Retry</button>'+
+      '<button class="bs2" onclick="discardFailedChange(\''+it.qid+'\')">Discard</button></div></div>';
+  }).join("");
+  ov.innerHTML='<div class="card" style="max-width:480px;width:100%;max-height:80vh;overflow:auto;margin:0">'+
+    '<div class="ct" style="margin-bottom:4px">Changes that couldn\u2019t save</div>'+
+    '<div class="lim" style="margin-bottom:6px">The server rejected these, so they were set aside to let everything else keep syncing. Retry sends the record as it is in the app now; Discard drops the change.</div>'+
+    rows+'<div style="text-align:right;margin-top:10px"><button class="bs2" onclick="closeFailedChanges()">Close</button></div></div>';
+  document.body.appendChild(ov);
+}
+
 async function qUp(table,row){
   try{
     await sbUp(table,row);
