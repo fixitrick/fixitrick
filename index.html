@@ -1292,10 +1292,109 @@ function getFormData(){var t=calcT();var num=document.getElementById("festnum").
   // a number exists yet, rather than whether an id exists yet, is the correct signal.
   if(!num){num=fmtN(S.nextEst);numIsPreview=true;}
   var id=document.getElementById("feid").value||uid();var existing=null;for(var i=0;i<ests.length;i++){if(ests[i].id===id){existing=ests[i];break}}return{id:id,estNum:num,estNumIsPreview:numIsPreview,customer:document.getElementById("fcn").value,phone:document.getElementById("fcp").value,email:document.getElementById("fce").value,address:document.getElementById("fca").value,cat:document.getElementById("fjc").value,desc:document.getElementById("fjd").value,notes:document.getElementById("fnotes").value,markupPct:+(document.getElementById("fmk").value)||0,taxPct:+(document.getElementById("ftx").value)||0,discount:t.dc,deposit:t.dep,total:t.tot,balance:t.bal,status:document.getElementById("fstat").value||"draft",leadId:document.getElementById("fleadid").value||null,mats:JSON.parse(JSON.stringify(mats)),labs:JSON.parse(JSON.stringify(labs)),photos:JSON.parse(JSON.stringify(photos)),created:existing?existing.created:Date.now(),emailedAt:existing?existing.emailedAt:null,emailedTo:existing?existing.emailedTo:null,schedDate:existing?existing.schedDate:null,schedDurationMin:existing?existing.schedDurationMin:60,zohoSyncOk:existing?existing.zohoSyncOk:true}}
+// Safety check for "+ New" estimates (v55, September 24, 2026). An estimate started
+// from the Estimates tab's + New isn't linked to any lead, so if that customer is
+// already in the Pipeline, their lead silently stays put (e.g. stuck in "Visit
+// passed") and is never marked won. On save, an UNLINKED estimate that is still a
+// draft or sent (the stage where this mistake happens; linking a later-stage estimate
+// could misstate its lead) is checked against OPEN leads (not won or lost) by phone or
+// email, the same match rule as the duplicate-lead flag. Name alone never matches. If
+// any match, Rick chooses which lead to link, or to keep it separate. Nothing links
+// without his tap. "Keep separate" is remembered on this device for this estimate and
+// those leads, so later saves don't ask again unless a different lead matches.
+var LINK_DECLINED_KEY="fir:leadLinkDeclined";
+function linkDeclinedLoad(){try{return JSON.parse(localStorage.getItem(LINK_DECLINED_KEY))||{}}catch(e){return{}}}
+function contactMatches(d,rec){
+  var np=normPhone(d.phone),ne=(d.email||"").toLowerCase().trim();
+  var op=normPhone(rec.phone),oe=(rec.email||"").toLowerCase().trim();
+  return!!((np&&op&&op===np)||(ne&&oe&&oe===ne));
+}
+function linkCheckApplies(d){
+  return!d.leadId&&statusIn(d.status,EST_UNDECIDED_STATUSES)&&!!(normPhone(d.phone)||(d.email||"").trim());
+}
+// Every open lead matching this estimate, BEFORE removing ones already declined.
+function openLeadMatches(d){
+  if(!linkCheckApplies(d))return[];
+  return leads.filter(function(l){return isLeadOpen(l)&&contactMatches(d,l);}).sort(function(a,b){return b.created-a.created});
+}
+function findLinkableLeads(d){
+  var declined=linkDeclinedLoad()[d.id]||[];
+  return openLeadMatches(d).filter(function(l){return declined.indexOf(l.id)===-1;});
+}
+// Existing clients matching this estimate (Section 66). Only offered when NO open lead
+// matches at all, even one Rick chose to keep separate from, so the check never
+// creates a second Pipeline entry alongside one that already exists for this person.
+function findLinkableClients(d){
+  if(!linkCheckApplies(d)||openLeadMatches(d).length)return[];
+  var declined=linkDeclinedLoad()[d.id]||[];
+  return clients.filter(function(c){return declined.indexOf("client:"+c.id)===-1&&contactMatches(d,c);}).sort(function(a,b){return(b.created||0)-(a.created||0)});
+}
+function rememberLinkDeclined(estId,leadIds){
+  var m=linkDeclinedLoad();m[estId]=(m[estId]||[]).concat(leadIds);
+  try{localStorage.setItem(LINK_DECLINED_KEY,JSON.stringify(m));}catch(e){}
+}
+// Generic "pick one of these, or keep separate" dialog used by the + New safety checks.
+// Resolves the chosen option, or null for "Keep separate" / tap outside / Escape.
+function askChoice(title,text,options){
+  return new Promise(function(resolve){
+    var old=document.getElementById("linklead-ov");if(old)old.remove();
+    var ov=document.createElement("div");ov.id="linklead-ov";
+    ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px";
+    var btns=options.map(function(o,i){
+      return'<button class="bp" data-i="'+i+'" style="width:100%;text-align:left;margin-bottom:8px">'+esc(o.label)+'<br><span style="font-weight:400;font-size:11px;opacity:.85">'+esc(o.sub)+'</span></button>';
+    }).join("");
+    ov.innerHTML='<div class="card" role="dialog" aria-modal="true" aria-labelledby="linklead-t" style="max-width:400px;width:100%;margin:0">'+
+      '<div class="ct" id="linklead-t" style="margin-bottom:6px">'+esc(title)+'</div>'+
+      '<div style="font-size:13px;color:var(--text);margin-bottom:12px">'+esc(text)+'</div>'+
+      btns+'<div style="text-align:right"><button class="bs2" id="linklead-no">Keep separate</button></div></div>';
+    var done=function(v){document.removeEventListener("keydown",onKey);ov.remove();resolve(v);};
+    var onKey=function(ev){if(ev.key==="Escape")done(null);};
+    ov.addEventListener("click",function(ev){if(ev.target===ov)done(null);});
+    document.addEventListener("keydown",onKey);
+    document.body.appendChild(ov);
+    Array.prototype.forEach.call(ov.querySelectorAll("button[data-i]"),function(bt){bt.onclick=function(){done(options[+bt.getAttribute("data-i")].value);};});
+    document.getElementById("linklead-no").onclick=function(){done(null);};
+  });
+}
+function askLinkLead(matches){
+  return askChoice(
+    matches.length===1?"This customer is already in your Pipeline":"This customer matches "+matches.length+" leads",
+    "Linking this estimate to the lead keeps the Pipeline up to date and marks the lead won when you invoice \u2014 the same as starting it with \u2192 Estimate.",
+    matches.map(function(l){var g=GROUP_INFO[leadWorkflowGroup(l)];return{value:l,label:"Link to "+(l.name||"this lead"),sub:"Pipeline: "+((g&&g.label)||"")+" \u00b7 added "+new Date(l.created).toLocaleDateString()};}));
+}
+function askLinkClient(matches){
+  return askChoice(
+    matches.length===1?(matches[0].name||"This customer")+" is an existing client":"This customer matches "+matches.length+" clients",
+    "Start this as a new job for them? That adds a \u201cRepeat client\u201d entry to your Pipeline, tied to their record, and links this estimate to it \u2014 the same as using New Job on the Clients tab.",
+    matches.map(function(c){return{value:c,label:"New job for "+(c.name||"this client"),sub:"Client"+(c.created?" since "+new Date(c.created).toLocaleDateString():"")+(c.address?" \u00b7 "+c.address:"")};}));
+}
 async function saveEst(){
   var d=getFormData();await ensureEstNum(d);
   var idx=-1;for(var i=0;i<ests.length;i++){if(ests[i].id===d.id){idx=i;break}}
   var isNewEst=idx===-1;
+  var justLinked=false,startedForClient=null;
+  var linkMatches=findLinkableLeads(d);
+  if(linkMatches.length){
+    var chosen=await askLinkLead(linkMatches);
+    if(chosen){
+      d.leadId=chosen.id;justLinked=true;
+      var fl=document.getElementById("fleadid");if(fl)fl.value=chosen.id;// later saves keep the link
+    }else{
+      rememberLinkDeclined(d.id,linkMatches.map(function(l){return l.id}));
+    }
+  }else{
+    var clientMatches=findLinkableClients(d);
+    if(clientMatches.length){
+      var chosenC=await askLinkClient(clientMatches);
+      if(chosenC){
+        var nl=await createRepeatClientLead(chosenC);
+        d.leadId=nl.id;justLinked=true;startedForClient=chosenC.name||"the client";
+        var flc=document.getElementById("fleadid");if(flc)flc.value=nl.id;
+      }else{
+        rememberLinkDeclined(d.id,clientMatches.map(function(c){return"client:"+c.id}));
+      }
+    }
+  }
   if(idx>=0)ests[idx]=d;else ests.push(d);
   await qUp("fir_estimates",e2db(d));
   // A brand-new estimate linked to a lead means that lead's visit already did its job.
@@ -1304,7 +1403,9 @@ async function saveEst(){
   // scheduled" on the lead forever without this). Only clears the lead's own field —
   // this isn't a cancellation, so the past Zoho calendar event for the visit is left
   // alone; it already happened and stays as an accurate record of it.
-  if(isNewEst&&d.leadId){
+  // Also when this save just linked the estimate to a lead (+ New safety check above):
+  // that's the lead's first estimate, the same situation as a new → Estimate one.
+  if((isNewEst||justLinked)&&d.leadId){
     for(var li=0;li<leads.length;li++){
       if(leads[li].id===d.leadId&&leads[li].visitDate){
         leads[li].visitDate=null;
@@ -1320,7 +1421,9 @@ async function saveEst(){
   document.getElementById("festnum").value=d.estNum;
   document.getElementById("eftitle").textContent=d.estNum;
   updBtns(d.status);
-  toast("Saved! ("+d.estNum+")");
+  if(justLinked&&startedForClient){toast("Saved \u2014 new job started for "+startedForClient+" and linked ("+d.estNum+")");renderLL();renderDB();}
+  else if(justLinked){var ln=null;for(var k=0;k<leads.length;k++){if(leads[k].id===d.leadId){ln=leads[k];break}}toast("Saved and linked to "+((ln&&ln.name)||"the lead")+" ("+d.estNum+")");renderLL();}
+  else toast("Saved! ("+d.estNum+")");
 }
 async function markStat(stat){
   var id=document.getElementById("feid").value;
@@ -1872,13 +1975,19 @@ async function saveClient(){var name=document.getElementById("cln").value.trim()
 // where the new entry sits under "Waiting to hear back" (sorted newest-first within
 // that group, so it's right at the top) with both the Visit and Estimate buttons
 // available, same choice a brand-new lead already offers.
-async function newJobFromClient(id){
-  var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}
-  if(!c)return;
+// The Pipeline entry New Job creates, shared with the + New safety check (Section 66)
+// so both paths create exactly the same "Repeat client" lead and can't drift apart.
+async function createRepeatClientLead(c){
   var nl={id:uid(),name:c.name||"",phone:c.phone||"",email:c.email||"",address:c.address||"",source:"Repeat client",jobDesc:"",notes:"",status:"contacted",created:Date.now(),clientId:c.id};
   leads.push(nl);
   await qUp("fir_leads",l2db(nl));
   persistLocal();
+  return nl;
+}
+async function newJobFromClient(id){
+  var c=null;for(var i=0;i<clients.length;i++){if(clients[i].id===id){c=clients[i];break}}
+  if(!c)return;
+  await createRepeatClientLead(c);
   renderLL();renderDB();
   toast("New job started for "+(c.name||"client")+" \u2014 schedule a visit or create an estimate below");
   sv("leads");
