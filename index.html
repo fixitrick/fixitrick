@@ -135,7 +135,7 @@ textarea{resize:vertical;min-height:64px}
     <div id="unscheduled-list"></div>
   </div>
   <div class="owed-card" id="unsent-section" style="display:none">
-    <div class="ct">Invoices Not Yet Emailed</div>
+    <div class="ct">Paid Invoices Not Yet Emailed</div>
     <div id="unsent-list"></div>
   </div>
   <div class="owed-card" id="owed-section" style="display:none">
@@ -822,18 +822,17 @@ function renderDB(){
     return "<div class='owed-row' style='"+border+";padding-left:8px;cursor:pointer' onclick='openEF(\""+e.id+"\")'><div style='flex:1'><div class='lin'>"+esc(e.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>"+age+"</span></div><div class='lim'>"+esc(e.estNum||"")+" \u00b7 "+fmt(e.total)+"</div></div></div>";
   }).join(""):"<div class='es' style='padding:1rem'>Nothing approved and unscheduled.</div>";
 
-  // Invoices not yet emailed (v53, September 24, 2026). The safety net behind the
-  // email prompt at invoicing: catches an invoice where "Not now" was chosen, one with
-  // no email on file, or one created while its write was queued offline. Unpaid only —
-  // a paid invoice needs no chasing — and every unpaid invoice is always loaded, so
-  // this list is always complete. Same always-visible pattern as the sections above.
-  var unsent=invs.filter(function(i){return!i.paid&&!i.emailedAt}).sort(function(a,b){return a.created-b.created});
+  // Paid invoices not yet emailed (v58; was unpaid ones in v53). Rick emails an
+  // invoice once it's paid, as the customer's paid copy, so this lists paid invoices
+  // never emailed, oldest payment first. Unpaid invoices are tracked by "Outstanding
+  // Invoices" below. Invoices with no email address are left out, since there's
+  // nothing to send them to. Paid invoices load for the usual 90-day window.
+  var unsent=invs.filter(function(i){return i.paid&&!i.emailedAt&&i.email}).sort(function(a,b){return(a.paidAt||a.created)-(b.paidAt||b.created)});
   document.getElementById("unsent-section").style.display="block";
   document.getElementById("unsent-list").innerHTML=unsent.length?unsent.map(function(i){
-    var age=ageLabel(i.created);
-    var action=i.email?"<button class='bs2' style='padding:4px 9px;font-size:11px' onclick='emailInvFromDash(\""+i.id+"\")'>Email</button>":"<span class='lim' style='color:#dc3545'>No email on file</span>";
-    return "<div class='owed-row' style='"+ageBorder(i.created)+";padding-left:8px'><div style='flex:1'><div class='lin'>"+esc(i.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>"+age+"</span></div><div class='lim'>"+esc(i.invNum||"")+" \u00b7 "+fmt(i.balance||i.total)+"</div></div><div style='display:flex;gap:6px;align-items:center'>"+action+"</div></div>";
-  }).join(""):"<div class='es' style='padding:1rem'>Every unpaid invoice has been emailed.</div>";
+    var when=i.paidAt||i.created;
+    return "<div class='owed-row' style='"+ageBorder(when)+";padding-left:8px'><div style='flex:1'><div class='lin'>"+esc(i.customer||"")+" <span style='font-size:10px;font-weight:600;color:var(--muted)'>paid "+ageLabel(when)+"</span></div><div class='lim'>"+esc(i.invNum||"")+" \u00b7 "+fmt(i.total)+"</div></div><div style='display:flex;gap:6px;align-items:center'><button class='bs2' style='padding:4px 9px;font-size:11px' onclick='emailInvFromDash(\""+i.id+"\")'>Email</button></div></div>";
+  }).join(""):"<div class='es' style='padding:1rem'>Every paid invoice has been emailed.</div>";
 
   // Outstanding invoices detail
   var unpaid=invs.filter(function(i){return!i.paid}).sort(function(a,b){return a.dueDate-b.dueDate});
@@ -844,7 +843,13 @@ function renderDB(){
     var due=new Date(i.dueDate);var daysLeft=Math.round((i.dueDate-now)/(86400000));
     var overTag=daysLeft<0?"<span class=\'overdue-tag\'>"+Math.abs(daysLeft)+"d overdue</span>":"";
     var dueStr=daysLeft>=0?"Due "+due.toLocaleDateString():"Was due "+due.toLocaleDateString();
-    return"<div class=\'owed-row\'><div style=\'flex:1\'><div class=\'lin\'>"+esc(i.customer||"")+"</div><div class=\'lim\'>"+esc(i.invNum||"")+" · "+dueStr+" "+overTag+"</div></div><div style=\'display:flex;gap:6px;align-items:center\'><span class=\'lia\'>"+fmt(i.balance||i.total)+"</span><button class=\'bs2\' style=\'padding:4px 9px;font-size:11px\' onclick=\'markPaid(\"'+i.id+'\")\'>Mark Paid</button></div></div>";
+    // Mark Paid's id was broken here since before September 24, 2026: a quoting slip
+    // passed the literal text '+i.id+' instead of the invoice id, so the button showed
+    // "Marked paid!" but marked nothing (the Invoices tab's button worked). Fixed in v60,
+    // along with an Email button for an unpaid invoice not yet sent (or a sent marker),
+    // so a customer paying later always has the invoice to pay from.
+    var sendBit=i.emailedAt?"<span class='lim' style='color:#155724'>\u2709\ufe0f sent</span>":(i.email?"<button class='bs2' style='padding:4px 9px;font-size:11px' onclick='emailInvFromDash(\""+i.id+"\")'>Email</button>":"");
+    return"<div class='owed-row'><div style='flex:1'><div class='lin'>"+esc(i.customer||"")+"</div><div class='lim'>"+esc(i.invNum||"")+" \u00b7 "+dueStr+" "+overTag+"</div></div><div style='display:flex;gap:6px;align-items:center'><span class='lia'>"+fmt(i.balance||i.total)+"</span>"+sendBit+"<button class='bs2' style='padding:4px 9px;font-size:11px' onclick='markPaid(\""+i.id+"\")'>Mark Paid</button></div></div>";
   }).join(""):"<div class='es' style='padding:1rem'>Nothing outstanding.</div>";
   var recent=[].concat(ests.map(function(e){return{date:e.created,text:esc(e.estNum||"")+" - "+esc(e.customer||""),sub:fmt(e.total),status:e.status}}),invs.map(function(i){return{date:i.created,text:esc(i.invNum||"")+" - "+esc(i.customer||""),sub:fmt(i.total),status:i.paid?"paid":"unpaid"}})).sort(function(a,b){return b.date-a.date}).slice(0,8);
   document.getElementById("dact").innerHTML=recent.length?recent.map(function(r){return"<div class=\"li\"><div><div class=\"lin\">"+r.text+"</div><div class=\"lim\">"+r.sub+" · "+new Date(r.date).toLocaleDateString()+"</div></div><span class=\"badge "+r.status+"\">"+r.status+"</span></div>"}).join(""):"<div class=\"es\">No activity yet</div>";
@@ -1553,21 +1558,41 @@ async function toInvoice(){
     persistLocal();
     toast("Invoice "+num+" created!"+(d.leadId?" Linked lead marked won.":""));
     sv("inv");
-    // Prompt to email it now (v52, September 24, 2026). Invoicing has never sent the
-    // invoice by itself; it's a separate tap on the Invoices tab, which is easy to
-    // forget. Asking here keeps Rick in control of timing ("Not now" / Cancel leaves it
-    // unsent, and the Email button is still on the invoice). Only offered when the
-    // invoice actually reached the server, since the email function reads it from there.
-    if(invSaved&&inv.email){
-      if(await askEmailNow(num,inv.email)){await emailInv(inv.id);renderDB();}
+    // Rick is nearly always paid on the spot (v59, September 25, 2026), so the next
+    // natural step is asked right here: "Has the customer paid?" Paid runs the normal
+    // markPaid(), which then offers to email the paid invoice. Not yet leaves it unpaid,
+    // tracked under Outstanding Invoices, with Mark Paid on the invoice as before.
+    // There is deliberately no email prompt at invoicing itself (v58): invoices are
+    // emailed once paid. The Email button still works any time for unpaid invoices.
+    if(await askTwoChoice("Invoice "+num+" created","Has "+esc(inv.customer||"the customer")+" paid the <strong>"+fmt(inv.total)+"</strong>?","Not yet","Paid")){
+      await markPaid(inv.id);
+    }else if(invSaved&&inv.email){
+      // Not yet paid: the customer needs the invoice in order to pay later (v60), so
+      // offer to send it now. It goes out as a bill, with its due date. When payment
+      // arrives, Mark Paid offers to send the paid copy. Only offered once the invoice
+      // reached the server, since the email is built from the server's copy.
+      if(await askTwoChoice("Invoice "+num+" not yet paid","Email the invoice to <strong>"+esc(inv.email)+"</strong> so they can pay?","Not now","Send")){await emailInv(inv.id);renderDB();}
     }else if(invSaved){
-      toast("Invoice "+num+" created \u2014 no email on file, so it hasn't been sent");
+      toast("No email on file, so the invoice wasn't sent \u2014 print it or add an email");
     }
   }finally{
     invoiceLock=false;if(invBtn)invBtn.disabled=false;
   }
 }
-async function markPaid(id){for(var i=0;i<invs.length;i++){if(invs[i].id===id){invs[i].paid=true;invs[i].paidAt=Date.now();await qUp("fir_invoices",i2db(invs[i]));break;}}persistLocal();renderIL();toast("Marked paid!");}
+// Rick emails invoices once they're paid (v58, September 25, 2026), so this is where
+// the "Email it now?" prompt lives: after marking paid, if the customer has an email
+// address. Only offered when the paid status actually reached the server, since the
+// email is built from the server's copy and would otherwise still read as unpaid.
+// renderDB() added so the Dashboard's lists update immediately after marking paid.
+async function markPaid(id){
+  var inv=null,saved=false;
+  for(var i=0;i<invs.length;i++){if(invs[i].id===id){inv=invs[i];inv.paid=true;inv.paidAt=Date.now();saved=await qUp("fir_invoices",i2db(inv));break;}}
+  if(!inv){toast("Couldn't find that invoice \u2014 try reopening the app");return;}
+  persistLocal();renderIL();renderDB();toast("Marked paid!");
+  if(inv&&saved&&inv.email){
+    if(await askEmailNow((inv.invNum||"Invoice")+" marked paid",inv.email)){await emailInv(inv.id);renderDB();}
+  }
+}
 
 function toggleLF(){var f=document.getElementById("lform");if(f.style.display==="none"){["llid","lln","llp","lle","lla","llj"].forEach(function(x){document.getElementById(x).value=""});document.getElementById("lls").selectedIndex=0;document.getElementById("lform-title").textContent="New Lead";f.style.display="block";}else{f.style.display="none";}}
 function editLead(id){var l=null;for(var i=0;i<leads.length;i++){if(leads[i].id===id){l=leads[i];break}}if(!l)return;document.getElementById("llid").value=l.id;document.getElementById("lln").value=l.name||"";document.getElementById("llp").value=l.phone||"";document.getElementById("lle").value=l.email||"";document.getElementById("lls").value=l.source||"Website";document.getElementById("lla").value=l.address||"";document.getElementById("llj").value=l.jobDesc||"";document.getElementById("lln-notes").value=l.notes||"";document.getElementById("lform-title").textContent="Edit Lead";document.getElementById("lform").style.display="block";}
@@ -2026,6 +2051,10 @@ function buildPrint(d,type,docNum,footer){
     rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">'+esc(l.name||"Labor")+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:13px;color:#222">'+lh+' hrs</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;color:#222">'+fmt(lr)+'/hr</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(lh*lr)+'</td></tr>');
   });
   var t=+(d.total)||0,dep=+(d.deposit)||0,bal=+(d.balance)||(t-dep);
+  // A paid invoice reads as the customer's paid copy (v58): PAID stamp, amount paid,
+  // $0.00 balance. Mirrors send-document's emailed version.
+  var isPaidInv=(type==="INVOICE"&&!!d.paid);
+  var paidOn=(isPaidInv&&d.paidAt)?new Date(d.paidAt).toLocaleDateString():"";
   var subtotal_mat=(d.mats||[]).reduce(function(a,m){var mq=(m.qty===undefined||m.qty===null||m.qty==="")?1:+m.qty;return a+mq*(+(m.unit)||0)},0);
   var subtotal_lab=(d.labs||[]).reduce(function(a,l){var lh=(l.hrs===undefined||l.hrs===null||l.hrs==="")?1:+l.hrs;var lr=(l.rate===undefined||l.rate===null||l.rate==="")?(S.rate||100):+l.rate;return a+lh*lr},0);
   var markup_pct=+(d.markupPct)||0;
@@ -2091,6 +2120,7 @@ function buildPrint(d,type,docNum,footer){
   '<div style="font-size:16px;font-weight:700;color:#283010;margin-bottom:8px">'+docNum+'</div>'+
   '<div style="font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.08em">Date</div>'+
   '<div style="font-size:13px;font-weight:600;color:#222">'+new Date().toLocaleDateString()+'</div>'+
+  (isPaidInv?'<div style="margin-top:10px;display:inline-block;border:2px solid #1e7e34;color:#1e7e34;font-weight:900;font-size:16px;letter-spacing:3px;padding:3px 12px;border-radius:4px">PAID</div>'+(paidOn?'<div style="font-size:11px;color:#1e7e34;font-weight:600;margin-top:3px">'+paidOn+'</div>':''):'')+
   '</div></div>'+
 
   // LINE ITEMS TABLE
@@ -2117,10 +2147,14 @@ function buildPrint(d,type,docNum,footer){
   '<span style="color:#c8a048;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em">Total</span>'+
   '<span style="color:#fff;font-size:18px;font-weight:900">'+fmt(t)+'</span>'+
   '</div>'+
-  (dep?'<div style="background:#f8f6f0;padding:8px 14px">'+
+  (isPaidInv?'<div style="background:#f8f6f0;padding:8px 14px">'+
+  (dep?'<div style="display:flex;justify-content:space-between;font-size:13px;color:#c8a048;font-weight:600;padding:2px 0"><span>Deposit</span><span>'+fmt(dep)+'</span></div>':'')+
+  '<div style="display:flex;justify-content:space-between;font-size:13px;color:#1e7e34;font-weight:600;padding:2px 0"><span>'+(dep?'Final payment':'Amount paid')+'</span><span>'+fmt(dep?bal:t)+'</span></div>'+
+  '<div style="display:flex;justify-content:space-between;font-size:14px;color:#1e7e34;font-weight:700;padding:2px 0;border-top:1px solid #e5e5e5;margin-top:4px;padding-top:6px"><span>Balance Due</span><span>'+fmt(0)+'</span></div>'+
+  '</div>':(dep?'<div style="background:#f8f6f0;padding:8px 14px">'+
   '<div style="display:flex;justify-content:space-between;font-size:13px;color:#c8a048;font-weight:600;padding:2px 0"><span>Deposit</span><span>'+fmt(dep)+'</span></div>'+
   '<div style="display:flex;justify-content:space-between;font-size:14px;color:#283010;font-weight:700;padding:2px 0;border-top:1px solid #e5e5e5;margin-top:4px;padding-top:6px"><span>Balance Due</span><span>'+fmt(bal)+'</span></div>'+
-  '</div>':'')+
+  '</div>':''))+
   '</div>'+
 
   // FOOTER
@@ -2136,7 +2170,7 @@ function printEst(){
   var html=buildPrint(d,"ESTIMATE",d.estNum||"EST-???",schedLine+"Valid until: "+vd.toLocaleDateString()+"\n"+(d.notes||S.terms||""));
   var w=window.open("","_blank");if(w){w.document.write(html);w.document.close();w.print()}
 }
-function printInv(id){var inv=null;for(var i=0;i<invs.length;i++){if(invs[i].id===id){inv=invs[i];break}}if(!inv)return;var html=buildPrint(inv,"INVOICE",inv.invNum,"Due: "+new Date(inv.dueDate).toLocaleDateString()+"\n"+S.terms);var w=window.open("","_blank");if(w){w.document.write(html);w.document.close();w.print()}}
+function printInv(id){var inv=null;for(var i=0;i<invs.length;i++){if(invs[i].id===id){inv=invs[i];break}}if(!inv)return;var html=buildPrint(inv,"INVOICE",inv.invNum,inv.paid?("Paid in full"+(inv.paidAt?" on "+new Date(inv.paidAt).toLocaleDateString():"")+". Thank you for your business!"):("Due: "+new Date(inv.dueDate).toLocaleDateString()+"\n"+S.terms));var w=window.open("","_blank");if(w){w.document.write(html);w.document.close();w.print()}}
 async function emailEst(){
   var id=document.getElementById("feid").value;
   if(!id){toast("Save first");return}
@@ -2191,15 +2225,18 @@ async function emailInvFromDash(id){await emailInv(id);renderDB();}
 // browser's confirm(), so the choices read "Send" and "Not now" (not an ambiguous
 // OK/Cancel) and no web address appears as its title in the installed app. Resolves
 // true for Send; false for Not now, a tap outside, or Escape.
-function askEmailNow(invNum,email){
+// Two-button in-app dialog (v59): resolves true for the primary button, false for the
+// secondary, a tap outside, or Escape. Primary is focused. Used for "Has the customer
+// paid?" after invoicing and "Email the paid invoice?" after Mark Paid.
+function askTwoChoice(title,bodyHtml,noLabel,yesLabel){
   return new Promise(function(resolve){
     var old=document.getElementById("emailnow-ov");if(old)old.remove();
     var ov=document.createElement("div");ov.id="emailnow-ov";
     ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px";
     ov.innerHTML='<div class="card" role="dialog" aria-modal="true" aria-labelledby="emailnow-t" style="max-width:380px;width:100%;margin:0">'+
-      '<div class="ct" id="emailnow-t" style="margin-bottom:6px">Invoice '+esc(invNum)+' created</div>'+
-      '<div style="font-size:14px;color:var(--text);margin-bottom:14px">Email it to <strong>'+esc(email)+'</strong> now?</div>'+
-      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="bs2" id="emailnow-no">Not now</button><button class="bp" id="emailnow-yes">Send</button></div></div>';
+      '<div class="ct" id="emailnow-t" style="margin-bottom:6px">'+esc(title)+'</div>'+
+      '<div style="font-size:14px;color:var(--text);margin-bottom:14px">'+bodyHtml+'</div>'+
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="bs2" id="emailnow-no">'+esc(noLabel)+'</button><button class="bp" id="emailnow-yes">'+esc(yesLabel)+'</button></div></div>';
     var done=function(v){document.removeEventListener("keydown",onKey);ov.remove();resolve(v);};
     var onKey=function(ev){if(ev.key==="Escape")done(false);};
     ov.addEventListener("click",function(ev){if(ev.target===ov)done(false);});
@@ -2208,6 +2245,9 @@ function askEmailNow(invNum,email){
     document.getElementById("emailnow-no").onclick=function(){done(false);};
     var yes=document.getElementById("emailnow-yes");yes.onclick=function(){done(true);};yes.focus();
   });
+}
+function askEmailNow(title,email){
+  return askTwoChoice(title,'Email the paid invoice to <strong>'+esc(email)+'</strong> now?',"Not now","Send");
 }
 async function emailInv(id){
   var inv=null;for(var i=0;i<invs.length;i++){if(invs[i].id===id){inv=invs[i];break}}
