@@ -196,11 +196,11 @@ textarea{resize:vertical;min-height:64px}
     <div id="flab"></div><button class="alb" onclick="addLL()">+ Add labor</button>
   </div>
   <div class="card"><div class="ct">Pricing</div>
-    <div class="r3"><div><label>Markup%</label><input type="number" id="fmk" value="20" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Tax%</label><input type="number" id="ftx" value="0" step="0.1" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Discount$</label><input type="number" id="fdc" value="0" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r3"><div><label>Mat. markup%</label><input type="number" id="fmk" value="20" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Tax%</label><input type="number" id="ftx" value="0" step="0.1" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Discount$</label><input type="number" id="fdc" value="0" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
     <div class="r2" style="margin-bottom:8px"><div><label>Deposit$</label><input type="number" id="fdep" value="0" step="0.01" oninput="calcT()" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div><label>Notes</label><input id="fnotes" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
     <div class="tb">
       <div class="tr"><span>Materials</span><span id="tmat">$0.00</span></div><div class="tr"><span>Labor</span><span id="tlab">$0.00</span></div>
-      <div class="tr"><span>Markup</span><span id="tmk">$0.00</span></div><div class="tr"><span>Discount</span><span id="tdc">-$0.00</span></div>
+      <div class="tr"><span>Materials markup</span><span id="tmk">$0.00</span></div><div class="tr"><span>Discount</span><span id="tdc">-$0.00</span></div>
       <div class="tr"><span>Tax</span><span id="ttx">$0.00</span></div>
       <div class="tr gr"><span>Total</span><span id="tgr">$0.00</span></div>
       <div class="tr gold"><span>Deposit</span><span id="tdep">$0.00</span></div>
@@ -269,7 +269,7 @@ textarea{resize:vertical;min-height:64px}
     <div class="r2"><div class="mb"><label>Email</label><input id="se" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Website</label><input id="sw" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="card"><div class="ct">Default Rates</div>
-    <div class="r3"><div class="mb"><label>Labor $/hr</label><input type="number" id="sr" value="100" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Markup%</label><input type="number" id="sm" value="20" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Tax%</label><input type="number" id="st" value="0" step="0.1" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
+    <div class="r3"><div class="mb"><label>Labor $/hr</label><input type="number" id="sr" value="100" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Mat. markup%</label><input type="number" id="sm" value="20" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Tax%</label><input type="number" id="st" value="0" step="0.1" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="card"><div class="ct">Defaults</div>
     <div class="mb"><label>Payment Terms</label><textarea id="spt" style="min-height:48px"></textarea></div>
@@ -1298,7 +1298,7 @@ function calcT(){
   var lt=labs.reduce(function(a,l){var lh=(l.hrs===undefined||l.hrs===null)?1:+(l.hrs);var lr=(l.rate===undefined||l.rate===null)?(S.rate||100):+(l.rate);return a+lh*lr},0);
   var mkEl=document.getElementById("fmk"),txEl=document.getElementById("ftx"),dcEl=document.getElementById("fdc"),depEl=document.getElementById("fdep");
   var mk=mkEl?+(mkEl.value)||0:0,tx=txEl?+(txEl.value)||0:0,dc=dcEl?+(dcEl.value)||0:0,dep=depEl?+(depEl.value)||0:0;
-  var mka=(mt+lt)*mk/100,txa=(mt+lt+mka)*tx/100,tot=mt+lt+mka-dc+txa,bal=tot-dep;
+  var mka=mt*mk/100,txa=(mt+lt+mka)*tx/100,tot=mt+lt+mka-dc+txa,bal=tot-dep;
   function setEl(id,val){var el=document.getElementById(id);if(el)el.textContent=val;}
   setEl("tmat",fmt(mt));setEl("tlab",fmt(lt));setEl("tmk",fmt(mka));setEl("tdc","-"+fmt(dc));
   setEl("ttx",fmt(txa));setEl("tgr",fmt(tot));setEl("tdep",fmt(dep));setEl("tbal",fmt(bal));
@@ -2072,7 +2072,7 @@ function buildPrint(d,type,docNum,footer){
   var subtotal_mat=(d.mats||[]).reduce(function(a,m){var mq=(m.qty===undefined||m.qty===null||m.qty==="")?1:+m.qty;return a+mq*(+(m.unit)||0)},0);
   var subtotal_lab=(d.labs||[]).reduce(function(a,l){var lh=(l.hrs===undefined||l.hrs===null||l.hrs==="")?1:+l.hrs;var lr=(l.rate===undefined||l.rate===null||l.rate==="")?(S.rate||100):+l.rate;return a+lh*lr},0);
   var markup_pct=+(d.markupPct)||0;
-  var markup_amt=(subtotal_mat+subtotal_lab)*markup_pct/100;
+  var markup_amt=subtotal_mat*markup_pct/100; // materials only (v64)
   var tax_pct=+(d.taxPct)||0;
   var tax_amt=(subtotal_mat+subtotal_lab+markup_amt)*tax_pct/100;
   var discount=+(d.discount)||0;
@@ -2153,7 +2153,7 @@ function buildPrint(d,type,docNum,footer){
   '<div style="background:#f8f6f0;padding:10px 14px">'+
   '<div style="display:flex;justify-content:space-between;font-size:13px;color:#666;padding:3px 0"><span>Materials</span><span>'+fmt(subtotal_mat)+'</span></div>'+
   '<div style="display:flex;justify-content:space-between;font-size:13px;color:#666;padding:3px 0"><span>Labor</span><span>'+fmt(subtotal_lab)+'</span></div>'+
-  (markup_pct?'<div style="display:flex;justify-content:space-between;font-size:13px;color:#666;padding:3px 0"><span>Markup ('+markup_pct+'%)</span><span>'+fmt(markup_amt)+'</span></div>':'')+
+  (markup_pct?'<div style="display:flex;justify-content:space-between;font-size:13px;color:#666;padding:3px 0"><span>Materials markup ('+markup_pct+'%)</span><span>'+fmt(markup_amt)+'</span></div>':'')+
   (discount?'<div style="display:flex;justify-content:space-between;font-size:13px;color:#666;padding:3px 0"><span>Discount</span><span>-'+fmt(discount)+'</span></div>':'')+
   (tax_pct?'<div style="display:flex;justify-content:space-between;font-size:13px;color:#666;padding:3px 0"><span>Tax ('+tax_pct+'%)</span><span>'+fmt(tax_amt)+'</span></div>':'')+
   '</div>'+
