@@ -91,9 +91,8 @@ textarea{resize:vertical;min-height:64px}
 .bn-pill.bn-bad{background:#f8d7da;color:#721c24}
 .bn-pill.bn-ended{background:#fff3cd;color:#856404}
 .bn-count{font-size:11px;color:var(--faint);margin-top:3px;text-align:right}
-.bn-count.bn-long{color:#856404}
-.bn-prev{background:#363C18;color:#F1EFE8;font-size:13px;font-weight:500;line-height:1.45;text-align:center;padding:9px 12px;border-radius:8px;border-bottom:2px solid #C8A96A;overflow-wrap:anywhere}
-.bn-prev.bn-empty{color:rgba(241,239,232,.5);font-style:italic}
+.bn-prev{background:#F1EFE8;color:#363C18;font-size:13px;font-weight:700;line-height:1.45;text-align:center;padding:9px 12px;border-radius:8px;border:1px solid #DED9CC;border-bottom:3px solid #854F0B;overflow-wrap:anywhere}
+.bn-prev.bn-empty{color:#999;font-weight:500;font-style:italic}
 .bn-chips{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .bn-chip{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)}
 .bn-chip.on{background:var(--g);border-color:var(--g);color:#fff;font-weight:600}
@@ -316,7 +315,7 @@ textarea{resize:vertical;min-height:64px}
   <div class="card" id="banner-card">
     <div class="bn-head"><div class="ct">Status</div><span class="bn-pill" id="bn-pill">Loading...</span></div>
     <div class="mb"><label for="bn-msg">Message</label><textarea id="bn-msg" maxlength="160" rows="2" style="min-height:52px" oninput="bnRender()" onkeydown="if(event.key==='Enter')event.preventDefault()" placeholder="e.g. Now booking about two weeks out."></textarea><div class="bn-count" id="bn-count">0/160</div></div>
-    <div class="mb"><label>How it looks on fixitrick.com</label><div class="bn-prev" id="bn-prev"><span id="bn-prev-txt"></span></div></div>
+    <div class="mb"><label>How it looks on fixitrick.com (it scrolls there)</label><div class="bn-prev" id="bn-prev"><span id="bn-prev-txt"></span></div></div>
     <div class="mb"><label for="bn-end">Show through</label><input type="date" id="bn-end" onchange="bnRender()">
       <div class="bn-chips"><button type="button" class="bn-chip" data-days="7" onclick="bnQuick(7)">1 week</button><button type="button" class="bn-chip" data-days="14" onclick="bnQuick(14)">2 weeks</button><button type="button" class="bn-chip" data-days="30" onclick="bnQuick(30)">30 days</button></div></div>
     <div class="br" id="bn-actions"></div>
@@ -821,7 +820,6 @@ function sv(view){
 // they do (Publish banner / Update banner / Take down / Publish again).
 var bnSaved=null;// the row as last read from or saved to Supabase; null = not loaded
 var BN_MAX=160;// matches the table's check constraint
-var BN_PHONE_FIT=44;// about how many characters fit on an iPhone without scrolling
 var BN_DEFAULT_DAYS=30;
 function bnToday(){return new Date().toLocaleDateString("en-CA",{timeZone:"America/New_York"});}
 function bnAddDays(ymd,n){var p=ymd.split("-");return new Date(Date.UTC(+p[0],+p[1]-1,+p[2]+n)).toISOString().slice(0,10);}
@@ -837,8 +835,7 @@ function bnQuick(days){document.getElementById("bn-end").value=bnAddDays(bnToday
 function bnRender(){
   var c=bnClean(document.getElementById("bn-msg").value);
   var cnt=document.getElementById("bn-count");
-  cnt.textContent=(c?(c.length<=BN_PHONE_FIT?"Fits on a phone · ":"Scrolls slowly on a phone · "):"")+c.length+"/"+BN_MAX;
-  cnt.className="bn-count"+(c.length>BN_PHONE_FIT?" bn-long":"");
+  cnt.textContent=c.length+"/"+BN_MAX;
   document.getElementById("bn-prev-txt").textContent=c||"Your message will appear here.";
   document.getElementById("bn-prev").classList.toggle("bn-empty",!c);
   var end=document.getElementById("bn-end").value;
