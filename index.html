@@ -100,10 +100,11 @@ textarea{resize:vertical;min-height:64px}
 /* Tab bar "more" hints (v66): fade + arrow at whichever edge has more tabs */
 .navwrap{position:relative;margin-top:8px;margin-bottom:1.1rem}
 .navwrap>.nav{margin-top:0;margin-bottom:0;position:relative}
-.nav-arr{position:absolute;top:0;bottom:1px;width:40px;border:none;padding:0;cursor:pointer;font-family:inherit;font-size:22px;font-weight:700;line-height:1;color:var(--g);display:none;z-index:2}
+.nav-arr{position:absolute;top:0;bottom:1px;width:56px;border:none;padding:0;cursor:pointer;font-size:0;display:none;z-index:2}
+.nav-arr span{width:30px;height:30px;border-radius:50%;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .nav-arr.show{display:flex;align-items:center}
-.nav-arr-r{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to right,rgba(242,240,234,0),var(--bg) 60%)}
-.nav-arr-l{left:0;justify-content:flex-start;padding-left:2px;background:linear-gradient(to left,rgba(242,240,234,0),var(--bg) 60%)}
+.nav-arr-r{right:0;justify-content:flex-end;padding-right:0;background:linear-gradient(to right,rgba(242,240,234,0),var(--bg) 60%)}
+.nav-arr-l{left:0;justify-content:flex-start;padding-left:0;background:linear-gradient(to left,rgba(242,240,234,0),var(--bg) 60%)}
 </style>
 </head>
 <body>
@@ -128,7 +129,7 @@ textarea{resize:vertical;min-height:64px}
   <div class="hdr-r"><div style="font-size:10px;text-align:right;margin-bottom:2px" id="synclbl">...</div><div class="hdr-biz" id="hbiz">FixItRick Home Repair Services</div><div class="hdr-c" id="hcon">614-966-2311 · rickh@fixitrick.com</div><div style="margin-top:3px"><button class="logout-link" onclick="logout()">Sign out</button></div></div>
 </div>
 <div class="navwrap">
-<button type="button" class="nav-arr nav-arr-l" id="nav-arr-l" aria-label="Show earlier tabs" onclick="navStep(-1)">‹</button>
+<button type="button" class="nav-arr nav-arr-l" id="nav-arr-l" aria-label="Show earlier tabs" onclick="navStep(-1)"><span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg></span></button>
 <nav class="nav" id="navbar" onscroll="navUpd()">
   <button class="nb on" onclick="sv('db')">Dashboard</button>
   <button class="nb" onclick="sv('reports')">Reports</button>
@@ -143,7 +144,7 @@ textarea{resize:vertical;min-height:64px}
   <button class="nb" onclick="sv('banner')">Website</button>
   <button class="nb" onclick="openHowTo('')">How-To</button>
 </nav>
-<button type="button" class="nav-arr nav-arr-r" id="nav-arr-r" aria-label="Show more tabs" onclick="navStep(1)">›</button>
+<button type="button" class="nav-arr nav-arr-r" id="nav-arr-r" aria-label="Show more tabs" onclick="navStep(1)"><span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></span></button>
 </div>
 <div id="v-db" class="view on">
   <div class="sg" id="dstats"></div>
@@ -822,7 +823,7 @@ function navUpd(){
 function navStep(dir){var n=document.getElementById("navbar");n.scrollBy({left:dir*Math.round(n.clientWidth*0.7),behavior:"smooth"});}
 function navReveal(b){
   var n=document.getElementById("navbar");if(!n||!b)return;
-  var l=b.offsetLeft,r=l+b.offsetWidth,pad=44;
+  var l=b.offsetLeft,r=l+b.offsetWidth,pad=60;// keep the tab clear of the arrow circles
   if(l<n.scrollLeft+pad||r>n.scrollLeft+n.clientWidth-pad)n.scrollTo({left:Math.max(0,l-(n.clientWidth-b.offsetWidth)/2),behavior:"smooth"});
   setTimeout(navUpd,400);
 }
