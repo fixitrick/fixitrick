@@ -83,6 +83,21 @@ textarea{resize:vertical;min-height:64px}
 #login-error{display:none;background:#f8d7da;color:#721c24;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-bottom:10px}
 #login-btn{width:100%;margin-top:6px}
 .logout-link{background:none;border:none;color:var(--au);font-size:11px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline}
+/* Website banner card (v65) */
+.bn-help{font-size:12px;color:#555;margin:0 0 10px}
+.bn-status{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+.bn-status.bn-live{color:#155724;background:#d4edda}
+.bn-status.bn-bad{color:#721c24;background:#f8d7da}
+.bn-count{font-size:11px;color:var(--faint);margin-top:3px}
+.bn-count.bn-long{color:#856404}
+.bn-row{display:flex;align-items:center;gap:8px;height:38px;font-size:13px;font-weight:600;color:var(--text)}
+.bn-sw{width:46px;height:26px;border-radius:13px;border:none;background:#ccc;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;padding:0}
+.bn-sw .bn-knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.bn-sw[aria-checked="true"]{background:var(--g)}
+.bn-sw[aria-checked="true"] .bn-knob{transform:translateX(20px)}
+.bn-prev{background:#363C18;color:#F1EFE8;font-size:13px;font-weight:500;line-height:1.45;text-align:center;padding:9px 12px;border-radius:8px;border-bottom:2px solid #C8A96A;overflow-wrap:anywhere}
+.bn-prev.bn-empty{color:rgba(241,239,232,.5);font-style:italic}
+.bn-prev-note{font-size:11px;color:var(--faint);margin-top:4px}
 </style>
 </head>
 <body>
@@ -277,6 +292,16 @@ textarea{resize:vertical;min-height:64px}
     <div class="r2"><div class="mb"><label>Next Estimate #</label><input type="number" id="sne" value="1" min="1" autocomplete="off" autocorrect="off" autocapitalize="off"></div><div class="mb"><label>Next Invoice #</label><input type="number" id="sni" value="1" min="1" autocomplete="off" autocorrect="off" autocapitalize="off"></div></div>
   </div>
   <div class="br"><button class="bp" onclick="saveSettings()">Save Settings</button></div>
+  <div class="card" id="banner-card" style="margin-top:.85rem"><div class="ct">Website Banner</div>
+    <p class="bn-help">A strip across the top of fixitrick.com. It has its own Save button, separate from Save Settings, and needs a connection to save.</p>
+    <div id="bn-status" class="bn-status">Loading...</div>
+    <div class="mb"><label for="bn-msg">Message</label><textarea id="bn-msg" maxlength="160" rows="2" style="min-height:52px" oninput="bnRender()" onkeydown="if(event.key==='Enter')event.preventDefault()" placeholder="Now booking about two weeks out. Send a request and we'll confirm the next open date."></textarea><div class="bn-count" id="bn-count">0/160</div></div>
+    <div class="r2"><div class="mb"><label>Show on website</label><div class="bn-row"><button type="button" id="bn-on" class="bn-sw" role="switch" aria-checked="false" aria-label="Show banner on website" onclick="bnToggle()"><span class="bn-knob"></span></button><span id="bn-on-lbl">Off</span></div></div><div class="mb"><label for="bn-end">Hide after</label><input type="date" id="bn-end" onchange="bnRender()"></div></div>
+    <label>Preview</label>
+    <div class="bn-prev" id="bn-prev"><span id="bn-prev-txt"></span></div>
+    <div class="bn-prev-note" id="bn-prev-note">Shows through the end of the Hide after day, Eastern time. Turning it on fills in 30 days from today if no date is set.</div>
+    <div class="br"><button class="bp" id="bn-save" onclick="saveBanner()" disabled>Save Banner</button></div>
+  </div>
   <div class="card" style="border:1px solid #f5c6cb">
     <div class="ct" style="color:#721c24">Danger Zone</div>
     <p style="font-size:12px;color:#555;margin:0 0 10px">Permanently deletes all estimates, invoices, clients, leads, and expenses, and resets estimate/invoice numbering back to 001. Your business info and other settings are not affected.</p>
@@ -779,8 +804,95 @@ function sv(view){
   var btns=document.querySelectorAll(".nb");
   if(map[view]!==undefined)btns[map[view]].classList.add("on");
   if(view==="db")renderDB();else if(view==="reports")renderReports();else if(view==="est")renderEL();else if(view==="sched")renderSched();else if(view==="inv")renderIL();
-  else if(view==="cli")renderCL();else if(view==="exp")renderXL();else if(view==="leads")renderLL();else if(view==="set")loadSet();else if(view==="coi")loadCoi();
+  else if(view==="cli")renderCL();else if(view==="exp")renderXL();else if(view==="leads")renderLL();else if(view==="set"){loadSet();loadBanner();}else if(view==="coi")loadCoi();
   window.scrollTo(0,0);
+}
+// ---- Website banner (v65, October 19, 2026) ----
+// One row in fir_site_banner (id "main"). The website reads it with the public key, and
+// Supabase only hands it out while it's switched on, has a message, and its Hide after
+// date hasn't passed in Eastern time (policy public_read_active). This card reads and
+// writes it directly, NOT through the offline queue: a banner change should go live now
+// or tell Rick it didn't, never sit queued and appear hours later. It's also separate
+// from saveSettings(), so a problem here can't affect markup, rates, or numbering.
+var bnSaved=null;// the row as last read from or saved to Supabase; null = not loaded
+var BN_MAX=160;// matches the table's check constraint
+var BN_PHONE_FIT=44;// about how many characters fit on an iPhone without scrolling
+function bnToday(){return new Date().toLocaleDateString("en-CA",{timeZone:"America/New_York"});}
+function bnAddDays(ymd,n){var p=ymd.split("-");return new Date(Date.UTC(+p[0],+p[1]-1,+p[2]+n)).toISOString().slice(0,10);}
+function bnFmtDate(ymd){var p=ymd.split("-");return new Date(Date.UTC(+p[0],+p[1]-1,+p[2])).toLocaleDateString("en-US",{timeZone:"UTC",weekday:"short",month:"short",day:"numeric"});}
+function bnClean(s){return String(s==null?"":s).replace(/\s+/g," ").trim();}
+function bnIsOn(){return document.getElementById("bn-on").getAttribute("aria-checked")==="true";}
+function bnSetSwitch(on){document.getElementById("bn-on").setAttribute("aria-checked",on?"true":"false");}
+function bnDirty(){
+  if(!bnSaved)return false;
+  return bnClean(document.getElementById("bn-msg").value)!==bnClean(bnSaved.message)||bnIsOn()!==!!bnSaved.enabled||(document.getElementById("bn-end").value||"")!==(bnSaved.hide_after||"");
+}
+function bnToggle(){
+  var on=!bnIsOn();bnSetSwitch(on);
+  var end=document.getElementById("bn-end");
+  if(on&&(!end.value||end.value<bnToday()))end.value=bnAddDays(bnToday(),30);
+  bnRender();
+}
+function bnRender(){
+  var c=bnClean(document.getElementById("bn-msg").value);
+  var cnt=document.getElementById("bn-count");
+  cnt.textContent=c.length+"/"+BN_MAX+(c?(c.length<=BN_PHONE_FIT?" · fits on a phone without scrolling":" · will scroll slowly on a phone"):"");
+  cnt.className="bn-count"+(c.length>BN_PHONE_FIT?" bn-long":"");
+  document.getElementById("bn-on-lbl").textContent=bnIsOn()?"On":"Off";
+  document.getElementById("bn-prev-txt").textContent=c||"Type a message to see it here.";
+  document.getElementById("bn-prev").classList.toggle("bn-empty",!c);
+  if(!bnSaved)return;
+  var today=bnToday(),s=bnSaved,t,cls="";
+  if(s.enabled&&bnClean(s.message)&&(!s.hide_after||s.hide_after>=today)){t="Showing on the website"+(s.hide_after?" through "+bnFmtDate(s.hide_after):"")+".";cls=" bn-live";}
+  else if(s.enabled&&s.hide_after&&s.hide_after<today){t="Ended "+bnFmtDate(s.hide_after)+". Nothing is showing on the website.";}
+  else{t="Off. Nothing is showing on the website.";}
+  if(bnDirty())t+=" You have unsaved changes.";
+  var st=document.getElementById("bn-status");st.textContent=t;st.className="bn-status"+cls;
+}
+async function loadBanner(){
+  var st=document.getElementById("bn-status"),btn=document.getElementById("bn-save");
+  st.textContent="Loading...";st.className="bn-status";btn.disabled=true;
+  try{
+    var r=await fetch(SURL+"/rest/v1/fir_site_banner?id=eq.main&select=message,enabled,hide_after",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    if(!r.ok)throw new Error(r.status+" "+await r.text());
+    var rows=await r.json();
+    if(!rows.length)throw new Error("banner row missing");
+    bnSaved=rows[0];
+    document.getElementById("bn-msg").value=bnSaved.message||"";
+    bnSetSwitch(!!bnSaved.enabled);
+    document.getElementById("bn-end").value=bnSaved.hide_after||"";
+    btn.disabled=false;
+    bnRender();
+  }catch(e){
+    console.error("Banner load failed:",e);bnSaved=null;bnRender();
+    st.textContent="Couldn't load the banner. Check your connection, then reopen Settings.";st.className="bn-status bn-bad";
+  }
+}
+async function saveBanner(){
+  if(!bnSaved){toast("Banner isn't loaded. Reopen Settings with a connection.");return;}
+  var msg=bnClean(document.getElementById("bn-msg").value);
+  var on=bnIsOn(),end=document.getElementById("bn-end").value||null,today=bnToday();
+  if(msg.length>BN_MAX){toast("Keep the message to "+BN_MAX+" characters.");return;}
+  if(on&&!msg){toast("Add a message before turning the banner on.");return;}
+  if(on&&!end){end=bnAddDays(today,30);document.getElementById("bn-end").value=end;}
+  if(on&&end<today){toast("That Hide after date has passed. Pick today or later.");return;}
+  if(!navigator.onLine){toast("No connection. Banner not saved. Try again when you have a signal.");return;}
+  var btn=document.getElementById("bn-save");btn.disabled=true;btn.textContent="Saving...";
+  try{
+    var r=await fetch(SURL+"/rest/v1/fir_site_banner?id=eq.main",{method:"PATCH",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify({message:msg,enabled:on,hide_after:end})});
+    if(!r.ok)throw new Error(r.status+" "+await r.text());
+    var rows=await r.json();
+    if(!rows.length)throw new Error("no row updated");
+    bnSaved=rows[0];
+    document.getElementById("bn-msg").value=bnSaved.message||"";
+    document.getElementById("bn-end").value=bnSaved.hide_after||"";
+    bnRender();
+    toast(on?"Banner saved. It's live on the website now.":"Banner saved. Nothing is showing on the website.");
+  }catch(e){
+    console.error("Banner save failed:",e);
+    toast("Banner not saved. Check your connection and try again.");
+  }
+  btn.disabled=false;btn.textContent="Save Banner";
 }
 function renderDB(){
   // Dashboard figures use a fixed window (v49, September 24, 2026). Before this they
