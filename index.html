@@ -97,6 +97,11 @@ textarea{resize:vertical;min-height:64px}
 .bn-chip{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)}
 .bn-chip.on{background:var(--g);border-color:var(--g);color:#fff;font-weight:600}
 .bn-foot{font-size:11px;color:var(--faint);margin-top:8px}
+/* Seasonal look card (November 13, 2026): same parts as the banner card, own chip class */
+.ss-chip{background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text)}
+.ss-chip.on{background:var(--g);border-color:var(--g);color:#fff;font-weight:600}
+.ss-prev{background:#4B5320;border-radius:8px;overflow:hidden;line-height:0}
+.ss-prev-note{font-size:11px;color:var(--faint);margin-top:5px;line-height:1.4}
 /* Tab bar "more" hints (v66): fade + arrow at whichever edge has more tabs */
 .navwrap{position:relative;margin-top:8px;margin-bottom:1.1rem}
 .navwrap>.nav{margin-top:0;margin-bottom:0;position:relative}
@@ -323,14 +328,23 @@ textarea{resize:vertical;min-height:64px}
   </div>
 </div>
 <div id="v-banner" class="view">
-  <div class="sh"><h2>Website Banner</h2></div>
+  <div class="sh"><h2>Website</h2></div>
   <div class="card" id="banner-card">
-    <div class="bn-head"><div class="ct">Status</div><span class="bn-pill" id="bn-pill">Loading...</span></div>
+    <div class="bn-head"><div class="ct">Banner</div><span class="bn-pill" id="bn-pill">Loading...</span></div>
     <div class="mb"><label for="bn-msg">Message</label><textarea id="bn-msg" maxlength="160" rows="2" style="min-height:52px" oninput="bnRender()" onkeydown="if(event.key==='Enter')event.preventDefault()" placeholder="e.g. Now booking about two weeks out."></textarea><div class="bn-count" id="bn-count">0/160</div></div>
     <div class="mb"><label>How it looks on fixitrick.com (it scrolls there)</label><div class="bn-prev" id="bn-prev"><span id="bn-prev-txt"></span></div></div>
     <div class="mb"><label for="bn-end">Show through</label><input type="date" id="bn-end" onchange="bnRender()">
       <div class="bn-chips"><button type="button" class="bn-chip" data-days="7" onclick="bnQuick(7)">1 week</button><button type="button" class="bn-chip" data-days="14" onclick="bnQuick(14)">2 weeks</button><button type="button" class="bn-chip" data-days="30" onclick="bnQuick(30)">30 days</button></div></div>
     <div class="br" id="bn-actions"></div>
+    <div class="bn-foot">Changes go live on fixitrick.com right away and need a connection.</div>
+  </div>
+  <div class="card" id="season-card">
+    <div class="bn-head"><div class="ct">Seasonal look</div><span class="bn-pill" id="ss-pill">Loading...</span></div>
+    <div class="mb"><label for="ss-theme">Look</label><select id="ss-theme" onchange="ssRender()"><option value="winter">Winter lights and snow</option></select></div>
+    <div class="mb"><label>What it adds to fixitrick.com</label><div class="ss-prev"><svg viewBox="0 0 520 30" width="100%" height="30" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M0 4 Q26 22 52 4 Q78 22 104 4 Q130 22 156 4 Q182 22 208 4 Q234 22 260 4 Q286 22 312 4 Q338 22 364 4 Q390 22 416 4 Q442 22 468 4 Q494 22 520 4" fill="none" stroke="#23270f" stroke-width="1.6" stroke-linecap="round"/><circle cx="26" cy="21.4" r="8" fill="#F0392B" opacity=".26"/><rect x="24.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="26" cy="21.4" rx="3.8" ry="5.2" fill="#F0392B"/><circle cx="78" cy="21.4" r="8" fill="#35D06A" opacity=".26"/><rect x="76.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="78" cy="21.4" rx="3.8" ry="5.2" fill="#35D06A"/><circle cx="130" cy="21.4" r="8" fill="#4DA3FF" opacity=".26"/><rect x="128.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="130" cy="21.4" rx="3.8" ry="5.2" fill="#4DA3FF"/><circle cx="182" cy="21.4" r="8" fill="#FFD23F" opacity=".26"/><rect x="180.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="182" cy="21.4" rx="3.8" ry="5.2" fill="#FFD23F"/><circle cx="234" cy="21.4" r="8" fill="#FFF6DC" opacity=".26"/><rect x="232.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="234" cy="21.4" rx="3.8" ry="5.2" fill="#FFF6DC"/><circle cx="286" cy="21.4" r="8" fill="#F0392B" opacity=".26"/><rect x="284.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="286" cy="21.4" rx="3.8" ry="5.2" fill="#F0392B"/><circle cx="338" cy="21.4" r="8" fill="#35D06A" opacity=".26"/><rect x="336.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="338" cy="21.4" rx="3.8" ry="5.2" fill="#35D06A"/><circle cx="390" cy="21.4" r="8" fill="#4DA3FF" opacity=".26"/><rect x="388.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="390" cy="21.4" rx="3.8" ry="5.2" fill="#4DA3FF"/><circle cx="442" cy="21.4" r="8" fill="#FFD23F" opacity=".26"/><rect x="440.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="442" cy="21.4" rx="3.8" ry="5.2" fill="#FFD23F"/><circle cx="494" cy="21.4" r="8" fill="#FFF6DC" opacity=".26"/><rect x="492.1" y="12.4" width="3.8" height="3.8" rx=".8" fill="#23270f"/><ellipse cx="494" cy="21.4" rx="3.8" ry="5.2" fill="#FFF6DC"/></svg></div><div class="ss-prev-note" id="ss-note"></div></div>
+    <div class="mb"><label for="ss-end">Show through</label><input type="date" id="ss-end" onchange="ssRender()">
+      <div class="bn-chips"><button type="button" class="ss-chip" data-days="14" onclick="ssQuick(14)">2 weeks</button><button type="button" class="ss-chip" data-days="30" onclick="ssQuick(30)">30 days</button><button type="button" class="ss-chip" data-days="60" onclick="ssQuick(60)">60 days</button></div></div>
+    <div class="br" id="ss-actions"></div>
     <div class="bn-foot">Changes go live on fixitrick.com right away and need a connection.</div>
   </div>
 </div>
@@ -839,7 +853,7 @@ function sv(view){
   var btns=document.querySelectorAll(".nb");
   if(map[view]!==undefined){btns[map[view]].classList.add("on");navReveal(btns[map[view]]);}
   if(view==="db")renderDB();else if(view==="reports")renderReports();else if(view==="est")renderEL();else if(view==="sched")renderSched();else if(view==="inv")renderIL();
-  else if(view==="cli")renderCL();else if(view==="exp")renderXL();else if(view==="leads")renderLL();else if(view==="set")loadSet();else if(view==="coi")loadCoi();else if(view==="banner")loadBanner();
+  else if(view==="cli")renderCL();else if(view==="exp")renderXL();else if(view==="leads")renderLL();else if(view==="set")loadSet();else if(view==="coi")loadCoi();else if(view==="banner"){loadBanner();loadSeason();}
   window.scrollTo(0,0);
 }
 // ---- Website banner (v65, October 19, 2026; card simplified the same day) ----
@@ -936,6 +950,92 @@ async function saveBanner(publish){
     console.error("Banner save failed:",e);
     toast("Couldn't reach the server. Nothing changed on the website.");
     bnRender();
+  }
+}
+// ---- Seasonal look (November 13, 2026) ----
+// One row in fir_site_theme (id "main"), built the same way as the banner above: the
+// website reads it with the public key, and Supabase only hands it out while it's
+// switched on and its "Show through" date (hide_after) hasn't passed in Eastern time.
+// Read and written directly, NOT through the offline queue, for the same reason as the
+// banner. Separate from the banner: either can be live without the other. To add a
+// look later, add it to SS_THEMES and the <select>, and to KNOWN in the website script.
+var ssSaved=null;// the row as last read from or saved to Supabase; null = not loaded
+var SS_DEFAULT_DAYS=30;
+var SS_THEMES={winter:{name:"Winter look",note:"A string of red, green, blue, yellow, and white lights under the menu, light snowflakes in the green area at the top, and a snowflake between banner repeats. Visitors who turn off motion see still lights and no snow."}};
+function ssIsLive(s){return !!(s&&s.enabled&&(!s.hide_after||s.hide_after>=bnToday()));}
+function ssIsEnded(s){return !!(s&&s.enabled&&s.hide_after&&s.hide_after<bnToday());}
+function ssDirty(){
+  if(!ssSaved)return false;
+  return document.getElementById("ss-theme").value!==ssSaved.theme||(document.getElementById("ss-end").value||"")!==(ssSaved.hide_after||"");
+}
+function ssQuick(days){document.getElementById("ss-end").value=bnAddDays(bnToday(),days);ssRender();}
+function ssRender(){
+  var theme=document.getElementById("ss-theme").value,info=SS_THEMES[theme];
+  document.getElementById("ss-note").textContent=info?info.note:"";
+  var end=document.getElementById("ss-end").value;
+  document.querySelectorAll(".ss-chip").forEach(function(b){b.classList.toggle("on",!!end&&end===bnAddDays(bnToday(),+b.getAttribute("data-days")));});
+  var pill=document.getElementById("ss-pill"),act=document.getElementById("ss-actions");
+  if(!ssSaved){act.innerHTML="";return;}
+  var s=ssSaved,live=ssIsLive(s),dirty=ssDirty();
+  if(live){pill.textContent="Live"+(s.hide_after?" through "+bnFmtDate(s.hide_after):"");pill.className="bn-pill bn-live";}
+  else if(ssIsEnded(s)){pill.textContent="Ended "+bnFmtDate(s.hide_after);pill.className="bn-pill bn-ended";}
+  else{pill.textContent="Off";pill.className="bn-pill";}
+  if(live){
+    act.innerHTML='<button class="bp" onclick="saveSeason(true)"'+(dirty?'':' disabled style="opacity:.5"')+'>Update look</button><button class="bs2" onclick="saveSeason(false)">Take down</button>';
+  }else{
+    act.innerHTML='<button class="bp" onclick="saveSeason(true)"'+(info?'':' disabled style="opacity:.5"')+'>'+(ssIsEnded(s)?"Publish again":"Publish look")+'</button>';
+  }
+}
+async function loadSeason(){
+  var pill=document.getElementById("ss-pill");
+  pill.textContent="Loading...";pill.className="bn-pill";document.getElementById("ss-actions").innerHTML="";
+  try{
+    var r=await fetch(SURL+"/rest/v1/fir_site_theme?id=eq.main&select=theme,enabled,hide_after",{headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN}});
+    if(!r.ok)throw new Error(r.status+" "+await r.text());
+    var rows=await r.json();
+    if(!rows.length)throw new Error("seasonal look row missing");
+    ssSaved=rows[0];
+    if(SS_THEMES[ssSaved.theme])document.getElementById("ss-theme").value=ssSaved.theme;
+    // Show the saved end date while live; otherwise suggest a fresh one for next time.
+    document.getElementById("ss-end").value=ssIsLive(ssSaved)?(ssSaved.hide_after||""):bnAddDays(bnToday(),SS_DEFAULT_DAYS);
+    ssRender();
+  }catch(e){
+    console.error("Seasonal look load failed:",e);ssSaved=null;ssRender();
+    pill.textContent="Couldn't load — reopen this tab";pill.className="bn-pill bn-bad";
+  }
+}
+// publish=true: Publish / Update / Publish again (switch on with this look and date).
+// publish=false: Take down (switch off; the look stays chosen for next time).
+async function saveSeason(publish){
+  if(!ssSaved){toast("Seasonal look isn't loaded. Reopen this tab with a connection.");return;}
+  var theme=document.getElementById("ss-theme").value;
+  var end=document.getElementById("ss-end").value||null,today=bnToday();
+  var body;
+  if(publish){
+    if(!SS_THEMES[theme]){toast("Pick a look first.");return;}
+    if(!end){end=bnAddDays(today,SS_DEFAULT_DAYS);document.getElementById("ss-end").value=end;}
+    if(end<today){toast("That date has passed. Pick today or later.");return;}
+    body={theme:theme,enabled:true,hide_after:end};
+  }else{
+    body={enabled:false};
+  }
+  if(!navigator.onLine){toast("No connection. Nothing changed on the website.");return;}
+  var btns=document.querySelectorAll("#ss-actions button");btns.forEach(function(b){b.disabled=true;});
+  try{
+    var r=await fetch(SURL+"/rest/v1/fir_site_theme?id=eq.main",{method:"PATCH",headers:{"apikey":SKEY,"Authorization":"Bearer "+ATOKEN,"Content-Type":"application/json","Prefer":"return=representation"},body:JSON.stringify(body)});
+    if(!r.ok)throw new Error(r.status+" "+await r.text());
+    var rows=await r.json();
+    if(!rows.length)throw new Error("no row updated");
+    ssSaved=rows[0];
+    if(SS_THEMES[ssSaved.theme])document.getElementById("ss-theme").value=ssSaved.theme;
+    if(publish)document.getElementById("ss-end").value=ssSaved.hide_after||"";
+    else document.getElementById("ss-end").value=bnAddDays(today,SS_DEFAULT_DAYS);
+    ssRender();
+    toast(publish?(SS_THEMES[ssSaved.theme]?SS_THEMES[ssSaved.theme].name:"Seasonal look")+" is live on fixitrick.com":"Seasonal look taken down");
+  }catch(e){
+    console.error("Seasonal look save failed:",e);
+    toast("Couldn't reach the server. Nothing changed on the website.");
+    ssRender();
   }
 }
 function renderDB(){
