@@ -2314,12 +2314,13 @@ function buildPrint(d,type,docNum,footer){
     var mq=(m.qty===undefined||m.qty===null||m.qty==="")?1:+m.qty;
     rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">'+esc(m.name)+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:13px;color:#222">'+mq+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;color:#222">'+fmt(+(m.unit)||0)+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(mq*(+(m.unit)||0))+'</td></tr>');
   });
-  (d.labs||[]).forEach(function(l){
-    if(!l.name&&!l.hrs)return;
-    var lh=(l.hrs===undefined||l.hrs===null||l.hrs==="")?1:+l.hrs;
-    var lr=(l.rate===undefined||l.rate===null||l.rate==="")?(S.rate||100):+l.rate;
-    rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">'+esc(l.name||"Labor")+'</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:center;font-size:13px;color:#222">'+lh+' hrs</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;color:#222">'+fmt(lr)+'/hr</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(lh*lr)+'</td></tr>');
-  });
+  // Customer copy shows labor as ONE dollar-only line (Nov 20, 2026): no per-step
+  // rows, no hours, no hourly rate. Labor steps stay itemized inside the app.
+  // Amount = the same labor subtotal used in the totals box below.
+  var labTotal=(d.labs||[]).reduce(function(a,l){var lh=(l.hrs===undefined||l.hrs===null||l.hrs==="")?1:+l.hrs;var lr=(l.rate===undefined||l.rate===null||l.rate==="")?(S.rate||100):+l.rate;return a+lh*lr},0);
+  if(labTotal){
+    rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">Labor</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8"></td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8"></td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(labTotal)+'</td></tr>');
+  }
   var t=+(d.total)||0,dep=+(d.deposit)||0,bal=+(d.balance)||(t-dep);
   // A paid invoice reads as the customer's paid copy (v58): PAID stamp, amount paid,
   // $0.00 balance. Mirrors send-document's emailed version.
@@ -2397,7 +2398,7 @@ function buildPrint(d,type,docNum,footer){
   '<table style="width:100%;border-collapse:collapse;margin-bottom:16px">'+
   '<thead><tr style="background:#283010;-webkit-print-color-adjust:exact;print-color-adjust:exact">'+
   '<th style="padding:9px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#c8a048;font-weight:700">Description</th>'+
-  '<th style="padding:9px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#c8a048;font-weight:700">Qty / Hrs</th>'+
+  '<th style="padding:9px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#c8a048;font-weight:700">Qty</th>'+
   '<th style="padding:9px 10px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#c8a048;font-weight:700">Rate</th>'+
   '<th style="padding:9px 10px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:#c8a048;font-weight:700">Total</th>'+
   '</tr></thead>'+
