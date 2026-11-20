@@ -2429,8 +2429,9 @@ function buildPrint(d,type,docNum,footer){
   '</div>'+
 
   // Fixed-price note under the total, estimates only (Nov 20, 2026). Same wording
-  // in send-document's emailed estimate.
-  (type==="ESTIMATE"?'<div style="margin-left:auto;width:280px;margin-top:8px;font-size:12px;color:#444;font-style:italic;line-height:1.4">Fixed price for the work described. Any additional work you request will be quoted before it begins.</div>':'')+
+  // in send-document's emailed estimate. Payment Terms (from Settings) follow it.
+  (type==="ESTIMATE"?'<div style="margin-left:auto;width:280px;margin-top:8px;font-size:12px;color:#444;font-style:italic;line-height:1.4">Fixed price for the work described. Any additional work you request will be quoted before it begins.</div>'+
+    (S.terms?'<div style="margin-left:auto;width:280px;margin-top:6px;font-size:12px;color:#444;line-height:1.4;white-space:pre-line">'+esc(S.terms)+'</div>':''):'')+
 
   // FOOTER
   '<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e5e5e5;font-size:11px;color:#888;white-space:pre-line">'+(footer||S.terms||'')+'</div>'+
@@ -2442,7 +2443,9 @@ function printEst(){
   // Find schedDate from ests array
   var schedLine="";
   for(var i=0;i<ests.length;i++){if(ests[i].id===d.id&&ests[i].schedDate){schedLine="Scheduled: "+new Date(ests[i].schedDate).toLocaleString([],{weekday:"long",month:"long",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"})+"\n";break;}}
-  var html=buildPrint(d,"ESTIMATE",d.estNum||"EST-???",schedLine+"Valid until: "+vd.toLocaleDateString()+"\n"+(d.notes||S.terms||""));
+  // Payment Terms now print under the total on every estimate (Nov 20, 2026),
+  // so the footer no longer falls back to them (avoids showing them twice).
+  var html=buildPrint(d,"ESTIMATE",d.estNum||"EST-???",schedLine+"Valid until: "+vd.toLocaleDateString()+"\n"+(d.notes||""));
   var w=window.open("","_blank");if(w){w.document.write(html);w.document.close();w.print()}
 }
 function printInv(id){var inv=null;for(var i=0;i<invs.length;i++){if(invs[i].id===id){inv=invs[i];break}}if(!inv)return;var html=buildPrint(inv,"INVOICE",inv.invNum,inv.paid?("Paid in full"+(inv.paidAt?" on "+new Date(inv.paidAt).toLocaleDateString():"")+". Thank you for your business!"):("Due: "+new Date(inv.dueDate).toLocaleDateString()+"\n"+S.terms));var w=window.open("","_blank");if(w){w.document.write(html);w.document.close();w.print()}}
