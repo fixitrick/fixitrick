@@ -2428,6 +2428,10 @@ function buildPrint(d,type,docNum,footer){
   '</div>':''))+
   '</div>'+
 
+  // Fixed-price note under the total, estimates only (Nov 20, 2026). Same wording
+  // in send-document's emailed estimate.
+  (type==="ESTIMATE"?'<div style="margin-left:auto;width:280px;margin-top:8px;font-size:12px;color:#444;font-style:italic;line-height:1.4">Fixed price for the work described. Any additional work you request will be quoted before it begins.</div>':'')+
+
   // FOOTER
   '<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e5e5e5;font-size:11px;color:#888;white-space:pre-line">'+(footer||S.terms||'')+'</div>'+
   '</body></html>';
