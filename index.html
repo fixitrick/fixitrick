@@ -2319,7 +2319,15 @@ function buildPrint(d,type,docNum,footer){
   // Amount = the same labor subtotal used in the totals box below.
   var labTotal=(d.labs||[]).reduce(function(a,l){var lh=(l.hrs===undefined||l.hrs===null||l.hrs==="")?1:+l.hrs;var lr=(l.rate===undefined||l.rate===null||l.rate==="")?(S.rate||100):+l.rate;return a+lh*lr},0);
   if(labTotal){
-    rows.push('<tr><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;font-size:13px;color:#222">Labor</td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8"></td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8"></td><td style="padding:7px 10px;border-bottom:1px solid #e8e8e8;text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(labTotal)+'</td></tr>');
+    // Work steps listed under the Labor line (Nov 23, 2026): names only, no hours,
+    // rates, or per-step dollars. Blank names are skipped. Mirrors send-document.
+    var steps=(d.labs||[]).map(function(l){return String(l.name||"").trim()}).filter(function(n){return n});
+    var lb=steps.length?'':'border-bottom:1px solid #e8e8e8;';
+    rows.push('<tr><td style="padding:7px 10px;'+lb+'font-size:13px;font-weight:600;color:#222">Labor</td><td style="padding:7px 10px;'+lb+'"></td><td style="padding:7px 10px;'+lb+'"></td><td style="padding:7px 10px;'+lb+'text-align:right;font-size:13px;font-weight:600;color:#283010">'+fmt(labTotal)+'</td></tr>');
+    steps.forEach(function(n,k){
+      var last=k===steps.length-1,b=last?'border-bottom:1px solid #e8e8e8;':'';
+      rows.push('<tr><td colspan="4" style="padding:1px 10px '+(last?'7px':'1px')+' 26px;'+b+'font-size:12px;color:#555">&bull; '+esc(n)+'</td></tr>');
+    });
   }
   var t=+(d.total)||0,dep=+(d.deposit)||0,bal=+(d.balance)||(t-dep);
   // A paid invoice reads as the customer's paid copy (v58): PAID stamp, amount paid,
